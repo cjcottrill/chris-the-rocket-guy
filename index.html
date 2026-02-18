@@ -516,6 +516,18 @@
             margin-top: 8px;
         }
 
+        /* --- CACHE INDICATOR --- */
+        .cache-indicator {
+            text-align: center;
+            padding: 8px;
+            font-size: 0.8em;
+            color: #666699;
+        }
+
+        .cache-indicator.from-cache {
+            color: #44cc44;
+        }
+
         /* --- FOOTER --- */
         footer {
             text-align: center;
@@ -608,6 +620,11 @@
     </div>
 
     <!-- ============================================
+         CACHE INDICATOR
+         ============================================ -->
+    <div class="cache-indicator" id="cacheIndicator"></div>
+
+    <!-- ============================================
          SEARCH BAR
          ============================================ -->
     <div class="search-container" id="searchContainer">
@@ -675,10 +692,74 @@
         // CONFIGURATION
         // =============================================
         const API_BASE = 'https://ll.thespacedevs.com/2.2.0';
-        // NOTE: The free tier allows 15 requests per hour.
-        // We'll be careful with our API calls!
-
         const RESULTS_PER_PAGE = 12;
+
+        // =============================================
+        // CACHE SYSTEM 💾
+        // Saves API data so we don't refetch too soon
+        // =============================================
+        const cache = {};
+
+        // How long each type of data stays fresh (in minutes)
+        const CACHE_DURATIONS = {
+            upcoming: 5,     // Upcoming launches: 5 minutes (can change frequently)
+            previous: 30,    // Previous launches: 30 minutes (rarely changes)
+            news: 15          // News articles: 15 minutes
+        };
+
+        // Creates a unique key for each request so we can find it later
+        function getCacheKey(type, page) {
+            return `${type}_page${page}`;
+        }
+
+        // Checks if we have fresh cached data
+        // Returns the data if fresh, or null if expired/missing
+        function getCachedData(key, type) {
+            const cached = cache[key];
+            if (!cached) return null;
+
+            const now = Date.now();
+            const ageInMinutes = (now - cached.timestamp) / 1000 / 60;
+            const maxAge = CACHE_DURATIONS[type] || 5;
+
+            if (ageInMinutes < maxAge) {
+                // Data is still fresh!
+                const remainingMins = Math.round(maxAge - ageInMinutes);
+                console.log(`💾 Cache HIT for "${key}" — ${remainingMins} min until refresh`);
+                return cached.data;
+            } else {
+                // Data is stale, remove it
+                console.log(`🗑️ Cache EXPIRED for "${key}" — fetching fresh data`);
+                delete cache[key];
+                return null;
+            }
+        }
+
+        // Saves data to the cache with a timestamp
+        function setCachedData(key, data) {
+            cache[key] = {
+                data: data,
+                timestamp: Date.now()
+            };
+            console.log(`💾 Cached "${key}" — ${Object.keys(cache).length} items in cache`);
+        }
+
+        // Shows a small message telling the user where data came from
+        function showCacheIndicator(fromCache, type) {
+            const indicator = document.getElementById('cacheIndicator');
+            if (fromCache) {
+                const maxAge = CACHE_DURATIONS[type] || 5;
+                indicator.textContent = `⚡ Loaded instantly from cache (refreshes every ${maxAge} min)`;
+                indicator.className = 'cache-indicator from-cache';
+            } else {
+                indicator.textContent = `🌐 Fetched fresh data from API`;
+                indicator.className = 'cache-indicator';
+            }
+            // Fade out after 3 seconds
+            setTimeout(() => {
+                indicator.textContent = '';
+            }, 3000);
+        }
 
         // =============================================
         // APPLICATION STATE
@@ -733,13 +814,33 @@
         }
 
         // =============================================
-        // LOAD LAUNCHES FROM API
+        // LOAD LAUNCHES FROM API (with caching!)
         // =============================================
         async function loadLaunches() {
             const content = document.getElementById('mainContent');
             const pagination = document.getElementById('pagination');
 
-            // Show loading
+            // Step 1: Check the cache first!
+            const cacheKey = getCacheKey(state.currentTab, state.currentPage);
+            const cachedData = getCachedData(cacheKey, state.currentTab);
+
+            if (cachedData) {
+                // We have fresh data — use it instantly! ⚡
+                state.launches = cachedData.results || [];
+                state.totalResults = cachedData.count || 0;
+                state.nextUrl = cachedData.next;
+                state.previousUrl = cachedData.previous;
+
+                if (state.currentTab === 'upcoming' && state.currentPage === 1 && state.launches.length > 0) {
+                    setupCountdown(state.launches[0]);
+                }
+
+                applyFilters();
+                showCacheIndicator(true, state.currentTab);
+                return;  // Done! No API call needed
+            }
+
+            // Step 2: No cache — show loading and fetch from API
             content.innerHTML = `
                 <div class="loading">
                     <div class="spinner"></div>
@@ -749,23 +850,21 @@
             pagination.style.display = 'none';
 
             try {
-                // Build API URL based on current tab
                 const offset = (state.currentPage - 1) * RESULTS_PER_PAGE;
                 let url;
 
-               if (state.currentTab === 'upcoming') {
-    url = `${API_BASE}/launch/upcoming/?limit=${RESULTS_PER_PAGE}&offset=${offset}&mode=detailed&location__ids=12,27`;
-} else {
-    url = `${API_BASE}/launch/previous/?limit=${RESULTS_PER_PAGE}&offset=${offset}&mode=detailed&location__ids=12,27`;
-}
+                if (state.currentTab === 'upcoming') {
+                    url = `${API_BASE}/launch/upcoming/?limit=${RESULTS_PER_PAGE}&offset=${offset}&mode=detailed&location__ids=12,27`;
+                } else {
+                    url = `${API_BASE}/launch/previous/?limit=${RESULTS_PER_PAGE}&offset=${offset}&mode=detailed&location__ids=12,27`;
+                }
 
-
-                console.log('Fetching:', url);
+                console.log('🌐 Fetching:', url);
                 const response = await fetch(url, {
-    headers: {
-        'Authorization': 'Token 4ac401f3abc3ea11ca947c1c2d69a2bba08a5e5d'
-    }
-});
+                    headers: {
+                        'Authorization': 'Token 4ac401f3abc3ea11ca947c1c2d69a2bba08a5e5d'
+                    }
+                });
 
                 if (!response.ok) {
                     throw new Error(`API responded with status ${response.status}`);
@@ -773,19 +872,21 @@
 
                 const data = await response.json();
 
+                // Step 3: Save to cache for next time!
+                setCachedData(cacheKey, data);
+
                 // Save to state
                 state.launches = data.results || [];
                 state.totalResults = data.count || 0;
                 state.nextUrl = data.next;
                 state.previousUrl = data.previous;
 
-                // If this is the first load of upcoming, set the countdown
                 if (state.currentTab === 'upcoming' && state.currentPage === 1 && state.launches.length > 0) {
                     setupCountdown(state.launches[0]);
                 }
 
-                // Apply filters and render
                 applyFilters();
+                showCacheIndicator(false, state.currentTab);
 
             } catch (error) {
                 console.error('Error loading launches:', error);
@@ -794,7 +895,7 @@
                         <h2>😞 Oops! Something went wrong</h2>
                         <p>Could not load launch data. This might be because:</p>
                         <ul style="text-align: left; max-width: 400px; margin: 15px auto; color: #aaaacc;">
-                            <li>The free API has a limit of 15 requests/hour</li>
+                            <li>The API rate limit has been reached</li>
                             <li>Your internet connection has an issue</li>
                             <li>The API might be temporarily down</li>
                         </ul>
@@ -809,12 +910,29 @@
         }
 
         // =============================================
-        // LOAD NEWS (uses Spaceflight News API)
+        // LOAD NEWS (with caching!)
         // =============================================
         async function loadNews() {
             const content = document.getElementById('mainContent');
             const pagination = document.getElementById('pagination');
 
+            // Step 1: Check the cache first!
+            const cacheKey = getCacheKey('news', state.currentPage);
+            const cachedData = getCachedData(cacheKey, 'news');
+
+            if (cachedData) {
+                // We have fresh data — use it instantly! ⚡
+                state.totalResults = cachedData.count || 0;
+                state.nextUrl = cachedData.next;
+                state.previousUrl = cachedData.previous;
+
+                renderNews(cachedData.results || []);
+                updatePagination();
+                showCacheIndicator(true, 'news');
+                return;  // Done! No API call needed
+            }
+
+            // Step 2: No cache — show loading and fetch from API
             content.innerHTML = `
                 <div class="loading">
                     <div class="spinner"></div>
@@ -827,10 +945,14 @@
                 const offset = (state.currentPage - 1) * RESULTS_PER_PAGE;
                 const url = `https://api.spaceflightnewsapi.net/v4/articles/?limit=${RESULTS_PER_PAGE}&offset=${offset}`;
 
+                console.log('🌐 Fetching:', url);
                 const response = await fetch(url);
                 if (!response.ok) throw new Error('News API error');
 
                 const data = await response.json();
+
+                // Step 3: Save to cache for next time!
+                setCachedData(cacheKey, data);
 
                 state.totalResults = data.count || 0;
                 state.nextUrl = data.next;
@@ -838,6 +960,7 @@
 
                 renderNews(data.results || []);
                 updatePagination();
+                showCacheIndicator(false, 'news');
 
             } catch (error) {
                 console.error('Error loading news:', error);
@@ -1096,7 +1219,6 @@
             const missionType = launch.mission?.type || 'N/A';
             const orbit = launch.mission?.orbit?.name || 'N/A';
 
-            // Video/webcast links
             let webcastHtml = '';
             if (launch.vidURLs && launch.vidURLs.length > 0) {
                 webcastHtml = '<div style="margin-top: 15px;"><strong>📺 Watch Live:</strong><br>';
@@ -1153,7 +1275,6 @@
         }
 
         function closeModal(event) {
-            // Only close if clicking on the overlay (not the modal itself)
             if (event.target === document.getElementById('modalOverlay')) {
                 document.getElementById('modalOverlay').classList.remove('open');
             }
@@ -1184,7 +1305,6 @@
             } else {
                 loadLaunches();
             }
-            // Scroll to top
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
@@ -1206,6 +1326,7 @@
         // =============================================
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🚀 Chris The Rocket Guy is launching...');
+            console.log('💾 Cache system active — durations:', CACHE_DURATIONS);
             loadLaunches();
         });
     </script>
