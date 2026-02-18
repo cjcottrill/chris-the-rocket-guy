@@ -578,7 +578,7 @@
          ============================================ -->
     <section class="hero">
         <h1>🚀 Chris The Rocket Guy</h1>
-        <p>Track every rocket launch around the world</p>
+        <p>Track every rocket launch from Florida's Space Coast!</p>
     </section>
 
     <!-- ============================================
@@ -755,11 +755,12 @@
                 const offset = (state.currentPage - 1) * RESULTS_PER_PAGE;
                 let url;
 
-                if (state.currentTab === 'upcoming') {
-                    url = `${API_BASE}/launch/upcoming/?limit=${RESULTS_PER_PAGE}&offset=${offset}&mode=detailed`;
-                } else {
-                    url = `${API_BASE}/launch/previous/?limit=${RESULTS_PER_PAGE}&offset=${offset}&mode=detailed`;
-                }
+               if (state.currentTab === 'upcoming') {
+    url = `${API_BASE}/launch/upcoming/?limit=${RESULTS_PER_PAGE}&offset=${offset}&mode=detailed&location__ids=12,27`;
+} else {
+    url = `${API_BASE}/launch/previous/?limit=${RESULTS_PER_PAGE}&offset=${offset}&mode=detailed&location__ids=12,27`;
+}
+
 
                 console.log('Fetching:', url);
                 const response = await fetch(url);
