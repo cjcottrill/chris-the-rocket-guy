@@ -761,7 +761,11 @@
 
 
                 console.log('Fetching:', url);
-                const response = await fetch(url);
+                const response = await fetch(url, {
+    headers: {
+        'Authorization': 'Token 4ac401f3abc3ea11ca947c1c2d69a2bba08a5e5d'
+    }
+});
 
                 if (!response.ok) {
                     throw new Error(`API responded with status ${response.status}`);
