@@ -1,0 +1,35 @@
+{
+    "_README": "Manual overrides for launches. Use launch ID or slug as the key. These override auto-detection.",
+
+    "example-launch-id-here": {
+        "trajectory": "southeast",
+        "direction": "👉 Look RIGHT from the beach",
+        "rtls": true,
+        "chrisSays": {
+            "summary": "This is a special mission! Here's what to expect...",
+            "tips": [
+                "First tip about this specific launch.",
+                "Second tip about viewing."
+            ],
+            "rtlsTimeline": [
+                { "time": "T+2:30", "desc": "Stage separation — look for the SpaceX Nebula" },
+                { "time": "T+6:30", "desc": "Entry burn — 3 engines light up at ~40 miles" },
+                { "time": "T+8:30", "desc": "Landing burn — single engine at ~2 miles" },
+                { "time": "T+9:00", "desc": "SONIC BOOM — you'll feel it!" }
+            ]
+        }
+    },
+
+    "_HOW_TO_USE": {
+        "step1": "Find the launch on the site and click it to see details",
+        "step2": "Open browser DevTools (F12) and look at the console",
+        "step3": "You'll see the launch ID logged when you click a card",
+        "step4": "Copy that ID and use it as the key in this file",
+        "fields": {
+            "trajectory": "southeast, northeast, or polar",
+            "direction": "Text telling guests which way to look",
+            "rtls": "true if the booster comes back to the Cape",
+            "chrisSays": "Object with summary, tips array, and optional rtlsTimeline"
+        }
+    }
+}
