@@ -1,0 +1,753 @@
+/* ============================================
+   CHRIS THE ROCKET GUY - STYLES
+   ============================================ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #0a0a2e;
+    color: #ffffff;
+    min-height: 100vh;
+}
+
+/* --- HEADER / NAVIGATION --- */
+header {
+    background: linear-gradient(135deg, #1a1a4e, #0a0a2e);
+    border-bottom: 2px solid #ff6b35;
+    padding: 15px 20px;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+
+.header-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.logo {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #ff6b35;
+}
+
+.logo span {
+    color: #ffffff;
+}
+
+nav {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+nav button {
+    background: transparent;
+    color: #cccccc;
+    border: 1px solid #333366;
+    padding: 8px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: all 0.3s ease;
+}
+
+nav button:hover,
+nav button.active {
+    background: #ff6b35;
+    color: #ffffff;
+    border-color: #ff6b35;
+}
+
+/* --- HERO SECTION --- */
+.hero {
+    text-align: center;
+    padding: 40px 20px 20px;
+    background: radial-gradient(ellipse at top, #1a1a4e 0%, #0a0a2e 70%);
+}
+
+.hero h1 {
+    font-size: 2em;
+    margin-bottom: 10px;
+}
+
+.hero p {
+    color: #aaaacc;
+    font-size: 1.1em;
+}
+
+/* --- COUNTDOWN SECTION --- */
+.next-launch-countdown {
+    background: linear-gradient(135deg, #1a1a4e, #2a1a4e);
+    border: 1px solid #ff6b35;
+    border-radius: 15px;
+    padding: 25px;
+    max-width: 700px;
+    margin: 20px auto;
+    text-align: center;
+}
+
+.next-launch-countdown h2 {
+    color: #ff6b35;
+    margin-bottom: 5px;
+    font-size: 1.1em;
+}
+
+.next-launch-countdown .mission-name {
+    font-size: 1.4em;
+    margin-bottom: 15px;
+}
+
+.countdown-timer {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.countdown-unit {
+    background: #0a0a2e;
+    border-radius: 10px;
+    padding: 10px 15px;
+    min-width: 70px;
+}
+
+.countdown-unit .number {
+    font-size: 2em;
+    font-weight: bold;
+    color: #ff6b35;
+}
+
+.countdown-unit .label {
+    font-size: 0.75em;
+    color: #aaaacc;
+    text-transform: uppercase;
+}
+
+/* --- STATUS FILTER TABS --- */
+.status-filters {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    padding: 15px 20px;
+    flex-wrap: wrap;
+}
+
+.status-filters button {
+    background: #1a1a4e;
+    color: #cccccc;
+    border: 1px solid #333366;
+    padding: 6px 14px;
+    border-radius: 15px;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: all 0.3s ease;
+}
+
+.status-filters button:hover,
+.status-filters button.active {
+    background: #ff6b35;
+    color: white;
+    border-color: #ff6b35;
+}
+
+/* --- SEARCH BAR --- */
+.search-container {
+    max-width: 500px;
+    margin: 0 auto 20px;
+    padding: 0 20px;
+}
+
+.search-container input {
+    width: 100%;
+    padding: 10px 15px;
+    border-radius: 25px;
+    border: 1px solid #333366;
+    background: #1a1a4e;
+    color: #ffffff;
+    font-size: 1em;
+    outline: none;
+}
+
+.search-container input::placeholder {
+    color: #666699;
+}
+
+.search-container input:focus {
+    border-color: #ff6b35;
+}
+
+/* --- MAIN CONTENT AREA --- */
+.content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px 40px;
+}
+
+/* --- LOADING SPINNER --- */
+.loading {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid #333366;
+    border-top: 4px solid #ff6b35;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 15px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* --- LAUNCH CARDS --- */
+.launches-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 20px;
+}
+
+.launch-card {
+    background: linear-gradient(135deg, #1a1a4e, #151544);
+    border: 1px solid #333366;
+    border-radius: 15px;
+    overflow: hidden;
+    transition: transform 0.3s ease, border-color 0.3s ease;
+    cursor: pointer;
+}
+
+.launch-card:hover {
+    transform: translateY(-3px);
+    border-color: #ff6b35;
+}
+
+.launch-card-image {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+    background-color: #0a0a2e;
+}
+
+.launch-card-body {
+    padding: 15px;
+}
+
+.launch-card-body h3 {
+    font-size: 1.1em;
+    margin-bottom: 8px;
+    color: #ffffff;
+}
+
+.launch-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 0.85em;
+    color: #aaaacc;
+}
+
+.launch-meta .meta-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.launch-meta .meta-row .icon {
+    width: 16px;
+    text-align: center;
+}
+
+/* --- STATUS BADGES --- */
+.status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-size: 0.75em;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-top: 8px;
+}
+
+.status-go {
+    background: #1a4a1a;
+    color: #44cc44;
+    border: 1px solid #44cc44;
+}
+
+.status-tbd {
+    background: #4a4a1a;
+    color: #cccc44;
+    border: 1px solid #cccc44;
+}
+
+.status-success {
+    background: #1a4a1a;
+    color: #44cc44;
+    border: 1px solid #44cc44;
+}
+
+.status-failure {
+    background: #4a1a1a;
+    color: #cc4444;
+    border: 1px solid #cc4444;
+}
+
+.status-tbc {
+    background: #1a3a4a;
+    color: #44aacc;
+    border: 1px solid #44aacc;
+}
+
+.status-default {
+    background: #2a2a4a;
+    color: #aaaacc;
+    border: 1px solid #aaaacc;
+}
+
+/* --- TRAJECTORY BADGE --- */
+.trajectory-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-size: 0.75em;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-top: 4px;
+    margin-left: 4px;
+}
+
+.trajectory-southeast {
+    background: #1a3a1a;
+    color: #44ddaa;
+    border: 1px solid #44ddaa;
+}
+
+.trajectory-northeast {
+    background: #1a1a4a;
+    color: #44aadd;
+    border: 1px solid #44aadd;
+}
+
+.trajectory-rtls {
+    background: #4a2a1a;
+    color: #ffaa44;
+    border: 1px solid #ffaa44;
+}
+
+/* --- CHRIS SAYS SECTION (Collapsible) --- */
+.chris-says {
+    margin-top: 12px;
+    border-top: 1px solid #333366;
+    padding-top: 8px;
+}
+
+.chris-says-toggle {
+    background: none;
+    border: none;
+    color: #ff6b35;
+    cursor: pointer;
+    font-size: 0.85em;
+    padding: 4px 0;
+    width: 100%;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: inherit;
+}
+
+.chris-says-toggle:hover {
+    color: #ff8c5a;
+}
+
+.chris-says-toggle .arrow {
+    transition: transform 0.3s ease;
+    display: inline-block;
+    font-size: 0.7em;
+}
+
+.chris-says-toggle .arrow.open {
+    transform: rotate(90deg);
+}
+
+.chris-says-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease, padding 0.3s ease;
+    padding: 0;
+}
+
+.chris-says-content.open {
+    max-height: 500px;
+    padding: 10px 0 4px;
+}
+
+.chris-says-content p {
+    font-size: 0.82em;
+    color: #cccccc;
+    line-height: 1.5;
+    margin-bottom: 6px;
+}
+
+.chris-says-content .tip-label {
+    font-size: 0.7em;
+    color: #ff6b35;
+    text-transform: uppercase;
+    font-weight: bold;
+    margin-bottom: 2px;
+}
+
+.chris-says-content .tip-box {
+    background: #0a0a2e;
+    border-left: 3px solid #ff6b35;
+    border-radius: 0 8px 8px 0;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+}
+
+.chris-says-content .rtls-timeline {
+    background: #0a0a2e;
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-top: 6px;
+}
+
+.chris-says-content .rtls-timeline .rtls-event {
+    display: flex;
+    gap: 10px;
+    padding: 4px 0;
+    font-size: 0.8em;
+    align-items: baseline;
+}
+
+.chris-says-content .rtls-timeline .rtls-time {
+    color: #ff6b35;
+    font-weight: bold;
+    min-width: 55px;
+    white-space: nowrap;
+}
+
+.chris-says-content .rtls-timeline .rtls-desc {
+    color: #cccccc;
+}
+
+/* --- DETAIL MODAL --- */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 2000;
+    justify-content: center;
+    align-items: start;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.modal-overlay.open {
+    display: flex;
+}
+
+.modal {
+    background: #1a1a4e;
+    border: 1px solid #ff6b35;
+    border-radius: 15px;
+    max-width: 700px;
+    width: 100%;
+    margin-top: 30px;
+    margin-bottom: 30px;
+    overflow: hidden;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid #333366;
+}
+
+.modal-header h2 {
+    font-size: 1.2em;
+    color: #ff6b35;
+}
+
+.modal-close {
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    font-size: 1.5em;
+    cursor: pointer;
+    padding: 5px;
+}
+
+.modal-close:hover {
+    color: #ff6b35;
+}
+
+.modal-image {
+    width: 100%;
+    height: 300px;
+    object-fit: cover;
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.modal-body h3 {
+    margin-bottom: 10px;
+}
+
+.modal-body p {
+    color: #aaaacc;
+    line-height: 1.6;
+    margin-bottom: 10px;
+}
+
+.detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.detail-item {
+    background: #0a0a2e;
+    border-radius: 10px;
+    padding: 12px;
+}
+
+.detail-item .detail-label {
+    font-size: 0.75em;
+    color: #666699;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.detail-item .detail-value {
+    font-size: 0.95em;
+    color: #ffffff;
+}
+
+/* --- CHRIS SAYS IN MODAL --- */
+.modal-chris-says {
+    margin-top: 20px;
+    background: linear-gradient(135deg, #0a0a2e, #151535);
+    border: 1px solid #ff6b35;
+    border-radius: 12px;
+    padding: 18px;
+}
+
+.modal-chris-says h4 {
+    color: #ff6b35;
+    margin-bottom: 10px;
+    font-size: 1em;
+}
+
+.modal-chris-says p {
+    color: #cccccc;
+    font-size: 0.9em;
+    line-height: 1.6;
+}
+
+.modal-chris-says .tip-box {
+    background: #1a1a4e;
+    border-left: 3px solid #ff6b35;
+    border-radius: 0 8px 8px 0;
+    padding: 10px 14px;
+    margin: 10px 0;
+}
+
+.modal-chris-says .tip-label {
+    font-size: 0.75em;
+    color: #ff6b35;
+    text-transform: uppercase;
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.modal-chris-says .rtls-timeline {
+    background: #1a1a4e;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-top: 10px;
+}
+
+.modal-chris-says .rtls-timeline .rtls-event {
+    display: flex;
+    gap: 10px;
+    padding: 5px 0;
+    font-size: 0.85em;
+    align-items: baseline;
+}
+
+.modal-chris-says .rtls-timeline .rtls-time {
+    color: #ff6b35;
+    font-weight: bold;
+    min-width: 55px;
+    white-space: nowrap;
+}
+
+.modal-chris-says .rtls-timeline .rtls-desc {
+    color: #cccccc;
+}
+
+/* --- PAGINATION --- */
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    padding: 30px 20px;
+}
+
+.pagination button {
+    background: #1a1a4e;
+    color: #ffffff;
+    border: 1px solid #ff6b35;
+    padding: 10px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background 0.3s ease;
+}
+
+.pagination button:hover:not(:disabled) {
+    background: #ff6b35;
+}
+
+.pagination button:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.pagination .page-info {
+    color: #aaaacc;
+    font-size: 0.9em;
+}
+
+/* --- NEWS SECTION --- */
+.news-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.news-card {
+    background: linear-gradient(135deg, #1a1a4e, #151544);
+    border: 1px solid #333366;
+    border-radius: 15px;
+    overflow: hidden;
+    transition: transform 0.3s, border-color 0.3s;
+}
+
+.news-card:hover {
+    transform: translateY(-3px);
+    border-color: #ff6b35;
+}
+
+.news-card img {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+}
+
+.news-card-body {
+    padding: 15px;
+}
+
+.news-card-body h3 {
+    font-size: 1em;
+    margin-bottom: 8px;
+}
+
+.news-card-body h3 a {
+    color: #ffffff;
+    text-decoration: none;
+}
+
+.news-card-body h3 a:hover {
+    color: #ff6b35;
+}
+
+.news-card-body p {
+    font-size: 0.85em;
+    color: #aaaacc;
+    line-height: 1.5;
+}
+
+.news-card-body .news-date {
+    font-size: 0.75em;
+    color: #666699;
+    margin-top: 8px;
+}
+
+/* --- CACHE INDICATOR --- */
+.cache-indicator {
+    text-align: center;
+    padding: 8px;
+    font-size: 0.8em;
+    color: #666699;
+}
+
+.cache-indicator.from-cache {
+    color: #44cc44;
+}
+
+/* --- FOOTER --- */
+footer {
+    text-align: center;
+    padding: 30px 20px;
+    border-top: 1px solid #333366;
+    color: #666699;
+    font-size: 0.85em;
+}
+
+footer a {
+    color: #ff6b35;
+    text-decoration: none;
+}
+
+/* --- ERROR MESSAGE --- */
+.error-message {
+    text-align: center;
+    padding: 40px 20px;
+    color: #cc4444;
+}
+
+/* --- RESPONSIVE --- */
+@media (max-width: 600px) {
+    .hero h1 {
+        font-size: 1.4em;
+    }
+
+    .launches-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .detail-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .countdown-unit .number {
+        font-size: 1.5em;
+    }
+}
