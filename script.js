@@ -1,0 +1,976 @@
+// =============================================
+// CHRIS THE ROCKET GUY - MAIN SCRIPT
+// =============================================
+
+// =============================================
+// CONFIGURATION
+// =============================================
+const API_BASE = 'https://ll.thespacedevs.com/2.2.0';
+const RESULTS_PER_PAGE = 12;
+
+// =============================================
+// LAUNCH EXTRAS - Manual overrides & notes
+// Loaded from launch-extras.json at startup
+// =============================================
+let launchExtras = {};
+
+async function loadLaunchExtras() {
+    try {
+        const response = await fetch('launch-extras.json');
+        if (!response.ok) throw new Error('No extras file found');
+        launchExtras = await response.json();
+        console.log('📋 Loaded launch-extras.json —', Object.keys(launchExtras).length, 'entries');
+    } catch (error) {
+        console.log('📋 No launch-extras.json found — using auto-detection only');
+        launchExtras = {};
+    }
+}
+
+// =============================================
+// TRAJECTORY DETECTION ENGINE 🧭
+// Automatically figures out which direction
+// to look from the beach based on mission name
+// =============================================
+
+function getTrajectoryInfo(launch) {
+    const missionName = (launch.name || '').toLowerCase();
+    const missionDesc = (launch.mission?.description || '').toLowerCase();
+    const rocketName = (launch.rocket?.configuration?.name || '').toLowerCase();
+    const launchId = launch.id || '';
+    const slug = launch.slug || '';
+
+    // ------------------------------------------
+    // Step 1: Check manual overrides first
+    // ------------------------------------------
+    const extrasById = launchExtras[launchId];
+    const extrasBySlug = launchExtras[slug];
+    const extras = extrasById || extrasBySlug;
+
+    if (extras) {
+        console.log(`📋 Found manual extras for: ${launch.name}`);
+        return {
+            trajectory: extras.trajectory || null,
+            direction: extras.direction || null,
+            isRTLS: extras.rtls || false,
+            chrisSays: extras.chrisSays || null,
+            source: 'manual'
+        };
+    }
+
+    // ------------------------------------------
+    // Step 2: Starlink Group Detection
+    // Pattern: "Starlink Group X-YY"
+    // Groups 6, 12 → Southeast (look right)
+    // Groups 8, 10 → Northeast (look left)
+    // Groups 9, 11 → Vandenberg (shouldn't appear)
+    // ------------------------------------------
+    const starlinkMatch = missionName.match(/starlink\s+group\s+(\d+)/i);
+    if (starlinkMatch) {
+        const groupNum = parseInt(starlinkMatch[1]);
+
+        if ([6, 12].includes(groupNum)) {
+            return {
+                trajectory: 'southeast',
+                direction: '👉 Look RIGHT from the beach',
+                isRTLS: false,
+                chrisSays: buildStarlinkTips('southeast', groupNum),
+                source: 'auto-starlink'
+            };
+        }
+
+        if ([8, 10].includes(groupNum)) {
+            return {
+                trajectory: 'northeast',
+                direction: '👈 Look LEFT from the beach',
+                isRTLS: false,
+                chrisSays: buildStarlinkTips('northeast', groupNum),
+                source: 'auto-starlink'
+            };
+        }
+
+        if ([9, 11].includes(groupNum)) {
+            // Vandenberg — shouldn't show up since we filter by Florida
+            return {
+                trajectory: 'vandenberg',
+                direction: 'Launches from California — not visible from Florida',
+                isRTLS: false,
+                chrisSays: null,
+                source: 'auto-starlink'
+            };
+        }
+
+        // Unknown group number — provide generic tip
+        return {
+            trajectory: 'unknown',
+            direction: null,
+            isRTLS: false,
+            chrisSays: 'This is a Starlink mission. Watch for the first stage landing on the drone ship about 8.5 minutes after launch!',
+            source: 'auto-starlink'
+        };
+    }
+
+    // ------------------------------------------
+    // Step 3: NASA Crew Missions → RTLS
+    // Dragon crew missions return the booster
+    // to the landing zone (LZ-1) at the Cape
+    // ------------------------------------------
+    const isCrewMission = /crew[\s-]*\d/i.test(missionName) ||
+                          /crew\s+dragon/i.test(missionName) ||
+                          missionName.includes('uscv') ||
+                          (missionDesc.includes('crew') && missionDesc.includes('station'));
+
+    if (isCrewMission && rocketName.includes('falcon')) {
+        return {
+            trajectory: 'northeast',
+            direction: '👈 Look LEFT from the beach',
+            isRTLS: true,
+            chrisSays: buildRTLSTips('crew'),
+            source: 'auto-crew'
+        };
+    }
+
+    // ------------------------------------------
+    // Step 4: Other known RTLS indicators
+    // Heavy sats, national security, etc.
+    // ------------------------------------------
+    const isHeavy = rocketName.includes('falcon heavy');
+    if (isHeavy) {
+        return {
+            trajectory: 'variable',
+            direction: null,
+            isRTLS: true,
+            chrisSays: buildRTLSTips('heavy'),
+            source: 'auto-heavy'
+        };
+    }
+
+    // ------------------------------------------
+    // Step 5: Default for other Florida launches
+    // ------------------------------------------
+    return {
+        trajectory: null,
+        direction: null,
+        isRTLS: false,
+        chrisSays: null,
+        source: 'none'
+    };
+}
+
+// =============================================
+// BUILD CHRIS'S TIPS
+// =============================================
+
+function buildStarlinkTips(direction, groupNum) {
+    const dirText = direction === 'southeast'
+        ? 'This Starlink mission heads SOUTHEAST over the ocean. From the beach, look to your RIGHT.'
+        : 'This Starlink mission heads NORTHEAST along the coast. From the beach, look to your LEFT.';
+
+    return {
+        summary: dirText,
+        tips: [
+            'The rocket will be visible for about 3-4 minutes after launch.',
+            'Watch for stage separation — you\'ll see the second stage engine ignite as a bright dot pulling away.',
+            'The first stage will land on a drone ship in the Atlantic about 8.5 minutes after launch.',
+            'Best spot: anywhere on the beach with a clear view of the horizon toward the launch pads.'
+        ]
+    };
+}
+
+function buildRTLSTips(type) {
+    const intro = type === 'crew'
+        ? 'This is a crew mission! The booster comes BACK to the Cape — you get a double show!'
+        : 'This is a Falcon Heavy mission! The side boosters often come BACK to the Cape — double sonic booms!';
+
+    return {
+        summary: intro,
+        tips: [
+            'The booster returns to Landing Zone 1, right at the Cape.',
+            'Listen for the sonic boom around T+8 to 9 minutes — it\'s LOUD!',
+            'You\'ll hear the engines roar TWICE — once at launch, once at landing.'
+        ],
+        rtlsTimeline: [
+            { time: 'T+2:30', desc: 'Stage separation — look for the "SpaceX Nebula" (puff of gas in the sky)' },
+            { time: 'T+6:30', desc: 'Entry burn — 3 engines light up at ~40 miles altitude' },
+            { time: 'T+8:30', desc: 'Landing burn — single engine, about 2 miles from the pad' },
+            { time: 'T+9:00', desc: '💥 SONIC BOOM + engine roar — you\'ll feel it in your chest!' }
+        ]
+    };
+}
+
+// =============================================
+// RENDER "CHRIS SAYS" HTML
+// For use on cards (compact) and modal (full)
+// =============================================
+
+function renderChrisSaysCard(trajectoryInfo) {
+    // If no info, return empty
+    if (!trajectoryInfo.chrisSays && !trajectoryInfo.direction) return '';
+
+    const info = trajectoryInfo.chrisSays;
+    const uniqueId = 'cs-' + Math.random().toString(36).substr(2, 9);
+
+    let contentHtml = '';
+
+    if (trajectoryInfo.direction) {
+        contentHtml += `
+            <div class="tip-box">
+                <div class="tip-label">📍 Where to Look</div>
+                <p>${trajectoryInfo.direction}</p>
+            </div>
+        `;
+    }
+
+    if (info && info.summary) {
+        contentHtml += `<p>${info.summary}</p>`;
+    }
+
+    if (info && info.tips && info.tips.length > 0) {
+        contentHtml += `<p>💡 ${info.tips[0]}</p>`;
+    }
+
+    if (info && info.rtlsTimeline) {
+        contentHtml += `
+            <div class="rtls-timeline">
+                ${info.rtlsTimeline.map(event => `
+                    <div class="rtls-event">
+                        <span class="rtls-time">${event.time}</span>
+                        <span class="rtls-desc">${event.desc}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    return `
+        <div class="chris-says" onclick="event.stopPropagation()">
+            <button class="chris-says-toggle" onclick="toggleChrisSays('${uniqueId}', this)">
+                <span class="arrow" id="arrow-${uniqueId}">▶</span>
+                🎙️ Chris says...
+            </button>
+            <div class="chris-says-content" id="${uniqueId}">
+                ${contentHtml}
+            </div>
+        </div>
+    `;
+}
+
+function renderChrisSaysModal(trajectoryInfo) {
+    if (!trajectoryInfo.chrisSays && !trajectoryInfo.direction) return '';
+
+    const info = trajectoryInfo.chrisSays;
+
+    let contentHtml = '';
+
+    if (trajectoryInfo.direction) {
+        contentHtml += `
+            <div class="tip-box">
+                <div class="tip-label">📍 Where to Look</div>
+                <p>${trajectoryInfo.direction}</p>
+            </div>
+        `;
+    }
+
+    if (trajectoryInfo.isRTLS) {
+        contentHtml += `
+            <div class="tip-box">
+                <div class="tip-label">🔁 Return to Launch Site</div>
+                <p>The booster lands back at the Cape — watch AND listen!</p>
+            </div>
+        `;
+    }
+
+    if (info && info.summary) {
+        contentHtml += `<p>${info.summary}</p>`;
+    }
+
+    if (info && info.tips) {
+        info.tips.forEach(tip => {
+            contentHtml += `<p>💡 ${tip}</p>`;
+        });
+    }
+
+    if (info && info.rtlsTimeline) {
+        contentHtml += `
+            <div class="rtls-timeline">
+                <div class="tip-label" style="margin-bottom: 6px;">⏱️ RTLS Timeline</div>
+                ${info.rtlsTimeline.map(event => `
+                    <div class="rtls-event">
+                        <span class="rtls-time">${event.time}</span>
+                        <span class="rtls-desc">${event.desc}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    return `
+        <div class="modal-chris-says">
+            <h4>🎙️ Chris Says...</h4>
+            ${contentHtml}
+        </div>
+    `;
+}
+
+function toggleChrisSays(id, button) {
+    const content = document.getElementById(id);
+    const arrow = document.getElementById('arrow-' + id);
+
+    content.classList.toggle('open');
+    arrow.classList.toggle('open');
+}
+
+// =============================================
+// TRAJECTORY BADGE HTML
+// =============================================
+function renderTrajectoryBadge(trajectoryInfo) {
+    if (!trajectoryInfo.trajectory) return '';
+
+    let badgeClass = '';
+    let badgeText = '';
+
+    switch (trajectoryInfo.trajectory) {
+        case 'southeast':
+            badgeClass = 'trajectory-southeast';
+            badgeText = '↗ SE Trajectory';
+            break;
+        case 'northeast':
+            badgeClass = 'trajectory-northeast';
+            badgeText = '↗ NE Trajectory';
+            break;
+        case 'variable':
+            badgeClass = 'trajectory-northeast';
+            badgeText = '↕ Variable';
+            break;
+        default:
+            return '';
+    }
+
+    let html = `<span class="trajectory-badge ${badgeClass}">${badgeText}</span>`;
+
+    if (trajectoryInfo.isRTLS) {
+        html += `<span class="trajectory-badge trajectory-rtls">🔁 RTLS</span>`;
+    }
+
+    return html;
+}
+
+// =============================================
+// CACHE SYSTEM 💾
+// =============================================
+const cache = {};
+
+const CACHE_DURATIONS = {
+    upcoming: 5,
+    previous: 30,
+    news: 15
+};
+
+function getCacheKey(type, page) {
+    return `${type}_page${page}`;
+}
+
+function getCachedData(key, type) {
+    const cached = cache[key];
+    if (!cached) return null;
+
+    const now = Date.now();
+    const ageInMinutes = (now - cached.timestamp) / 1000 / 60;
+    const maxAge = CACHE_DURATIONS[type] || 5;
+
+    if (ageInMinutes < maxAge) {
+        const remainingMins = Math.round(maxAge - ageInMinutes);
+        console.log(`💾 Cache HIT for "${key}" — ${remainingMins} min until refresh`);
+        return cached.data;
+    } else {
+        console.log(`🗑️ Cache EXPIRED for "${key}" — fetching fresh data`);
+        delete cache[key];
+        return null;
+    }
+}
+
+function setCachedData(key, data) {
+    cache[key] = {
+        data: data,
+        timestamp: Date.now()
+    };
+    console.log(`💾 Cached "${key}" — ${Object.keys(cache).length} items in cache`);
+}
+
+function showCacheIndicator(fromCache, type) {
+    const indicator = document.getElementById('cacheIndicator');
+    if (fromCache) {
+        const maxAge = CACHE_DURATIONS[type] || 5;
+        indicator.textContent = `⚡ Loaded instantly from cache (refreshes every ${maxAge} min)`;
+        indicator.className = 'cache-indicator from-cache';
+    } else {
+        indicator.textContent = `🌐 Fetched fresh data from API`;
+        indicator.className = 'cache-indicator';
+    }
+    setTimeout(() => {
+        indicator.textContent = '';
+    }, 3000);
+}
+
+// =============================================
+// APPLICATION STATE
+// =============================================
+let state = {
+    currentTab: 'upcoming',
+    currentPage: 1,
+    totalResults: 0,
+    nextUrl: null,
+    previousUrl: null,
+    launches: [],
+    filteredLaunches: [],
+    statusFilter: 'all',
+    searchQuery: '',
+    nextLaunchDate: null,
+    countdownInterval: null
+};
+
+// =============================================
+// TAB SWITCHING
+// =============================================
+function switchTab(tab) {
+    state.currentTab = tab;
+    state.currentPage = 1;
+    state.statusFilter = 'all';
+    state.searchQuery = '';
+
+    document.querySelectorAll('nav button').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+
+    document.getElementById('searchInput').value = '';
+
+    document.querySelectorAll('.status-filters button').forEach(btn => btn.classList.remove('active'));
+    document.querySelector('.status-filters button:first-child').classList.add('active');
+
+    const isNews = tab === 'news';
+    document.getElementById('countdownSection').style.display = tab === 'upcoming' ? 'block' : 'none';
+    document.getElementById('searchContainer').style.display = isNews ? 'none' : 'block';
+    document.getElementById('statusFilters').style.display = isNews ? 'none' : 'flex';
+
+    if (isNews) {
+        loadNews();
+    } else {
+        loadLaunches();
+    }
+}
+
+// =============================================
+// LOAD LAUNCHES FROM API (with caching)
+// =============================================
+async function loadLaunches() {
+    const content = document.getElementById('mainContent');
+    const pagination = document.getElementById('pagination');
+
+    const cacheKey = getCacheKey(state.currentTab, state.currentPage);
+    const cachedData = getCachedData(cacheKey, state.currentTab);
+
+    if (cachedData) {
+        state.launches = cachedData.results || [];
+        state.totalResults = cachedData.count || 0;
+        state.nextUrl = cachedData.next;
+        state.previousUrl = cachedData.previous;
+
+        if (state.currentTab === 'upcoming' && state.currentPage === 1 && state.launches.length > 0) {
+            setupCountdown(state.launches[0]);
+        }
+
+        applyFilters();
+        showCacheIndicator(true, state.currentTab);
+        return;
+    }
+
+    content.innerHTML = `
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Fetching launch data from the cosmos...</p>
+        </div>
+    `;
+    pagination.style.display = 'none';
+
+    try {
+        const offset = (state.currentPage - 1) * RESULTS_PER_PAGE;
+        let url;
+
+        if (state.currentTab === 'upcoming') {
+            url = `${API_BASE}/launch/upcoming/?limit=${RESULTS_PER_PAGE}&offset=${offset}&mode=detailed&location__ids=12,27`;
+        } else {
+            url = `${API_BASE}/launch/previous/?limit=${RESULTS_PER_PAGE}&offset=${offset}&mode=detailed&location__ids=12,27`;
+        }
+
+        console.log('🌐 Fetching:', url);
+        const response = await fetch(url, {
+            headers: {
+                'Authorization': 'Token 4ac401f3abc3ea11ca947c1c2d69a2bba08a5e5d'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`API responded with status ${response.status}`);
+        }
+
+        const data = await response.json();
+        setCachedData(cacheKey, data);
+
+        state.launches = data.results || [];
+        state.totalResults = data.count || 0;
+        state.nextUrl = data.next;
+        state.previousUrl = data.previous;
+
+        if (state.currentTab === 'upcoming' && state.currentPage === 1 && state.launches.length > 0) {
+            setupCountdown(state.launches[0]);
+        }
+
+        applyFilters();
+        showCacheIndicator(false, state.currentTab);
+
+    } catch (error) {
+        console.error('Error loading launches:', error);
+        content.innerHTML = `
+            <div class="error-message">
+                <h2>😞 Oops! Something went wrong</h2>
+                <p>Could not load launch data. This might be because:</p>
+                <ul style="text-align: left; max-width: 400px; margin: 15px auto; color: #aaaacc;">
+                    <li>The API rate limit has been reached</li>
+                    <li>Your internet connection has an issue</li>
+                    <li>The API might be temporarily down</li>
+                </ul>
+                <p style="margin-top: 15px;">
+                    <button onclick="loadLaunches()" style="background: #ff6b35; color: white; border: none; padding: 10px 25px; border-radius: 25px; cursor: pointer; font-size: 1em;">
+                        Try Again
+                    </button>
+                </p>
+            </div>
+        `;
+    }
+}
+
+// =============================================
+// LOAD NEWS (with caching)
+// =============================================
+async function loadNews() {
+    const content = document.getElementById('mainContent');
+    const pagination = document.getElementById('pagination');
+
+    const cacheKey = getCacheKey('news', state.currentPage);
+    const cachedData = getCachedData(cacheKey, 'news');
+
+    if (cachedData) {
+        state.totalResults = cachedData.count || 0;
+        state.nextUrl = cachedData.next;
+        state.previousUrl = cachedData.previous;
+
+        renderNews(cachedData.results || []);
+        updatePagination();
+        showCacheIndicator(true, 'news');
+        return;
+    }
+
+    content.innerHTML = `
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Fetching space news...</p>
+        </div>
+    `;
+    pagination.style.display = 'none';
+
+    try {
+        const offset = (state.currentPage - 1) * RESULTS_PER_PAGE;
+        const url = `https://api.spaceflightnewsapi.net/v4/articles/?limit=${RESULTS_PER_PAGE}&offset=${offset}`;
+
+        console.log('🌐 Fetching:', url);
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('News API error');
+
+        const data = await response.json();
+        setCachedData(cacheKey, data);
+
+        state.totalResults = data.count || 0;
+        state.nextUrl = data.next;
+        state.previousUrl = data.previous;
+
+        renderNews(data.results || []);
+        updatePagination();
+        showCacheIndicator(false, 'news');
+
+    } catch (error) {
+        console.error('Error loading news:', error);
+        content.innerHTML = `
+            <div class="error-message">
+                <h2>📰 Could not load news</h2>
+                <p>Please try again later.</p>
+            </div>
+        `;
+    }
+}
+
+// =============================================
+// SEARCH & FILTER
+// =============================================
+function handleSearch() {
+    state.searchQuery = document.getElementById('searchInput').value.toLowerCase();
+    applyFilters();
+}
+
+function setStatusFilter(filter) {
+    state.statusFilter = filter;
+
+    document.querySelectorAll('.status-filters button').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+
+    applyFilters();
+}
+
+function applyFilters() {
+    let launches = [...state.launches];
+
+    if (state.statusFilter !== 'all') {
+        launches = launches.filter(launch => {
+            const statusName = launch.status?.name || '';
+            return statusName.toLowerCase().includes(state.statusFilter.toLowerCase());
+        });
+    }
+
+    if (state.searchQuery) {
+        launches = launches.filter(launch => {
+            const name = (launch.name || '').toLowerCase();
+            const provider = (launch.launch_service_provider?.name || '').toLowerCase();
+            const pad = (launch.pad?.name || '').toLowerCase();
+            const location = (launch.pad?.location?.name || '').toLowerCase();
+            const rocketName = (launch.rocket?.configuration?.name || '').toLowerCase();
+            const query = state.searchQuery;
+
+            return name.includes(query) ||
+                   provider.includes(query) ||
+                   pad.includes(query) ||
+                   location.includes(query) ||
+                   rocketName.includes(query);
+        });
+    }
+
+    state.filteredLaunches = launches;
+    renderLaunches(launches);
+    updatePagination();
+}
+
+// =============================================
+// RENDER LAUNCHES (with trajectory + Chris Says)
+// =============================================
+function renderLaunches(launches) {
+    const content = document.getElementById('mainContent');
+
+    if (launches.length === 0) {
+        content.innerHTML = `
+            <div class="error-message">
+                <h2>🔍 No launches found</h2>
+                <p>Try changing your search or filter.</p>
+            </div>
+        `;
+        return;
+    }
+
+    let html = '<div class="launches-grid">';
+
+    launches.forEach((launch, index) => {
+        const imageUrl = launch.image || 'https://via.placeholder.com/400x200/0a0a2e/666699?text=No+Image';
+        const date = launch.net ? new Date(launch.net).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZoneName: 'short'
+        }) : 'TBD';
+
+        const statusName = launch.status?.name || 'Unknown';
+        const statusClass = getStatusClass(statusName);
+        const provider = launch.launch_service_provider?.name || 'Unknown Provider';
+        const location = launch.pad?.location?.name || 'Unknown Location';
+        const rocketName = launch.rocket?.configuration?.name || 'Unknown Rocket';
+
+        // NEW: Get trajectory info
+        const trajectoryInfo = getTrajectoryInfo(launch);
+        const trajectoryBadgeHtml = renderTrajectoryBadge(trajectoryInfo);
+        const chrisSaysHtml = renderChrisSaysCard(trajectoryInfo);
+
+        html += `
+            <div class="launch-card" onclick="openModal(${index})">
+                <img class="launch-card-image" src="${imageUrl}" alt="${launch.name}" 
+                     onerror="this.src='https://via.placeholder.com/400x200/0a0a2e/666699?text=No+Image'">
+                <div class="launch-card-body">
+                    <h3>${launch.name || 'Unnamed Launch'}</h3>
+                    <div class="launch-meta">
+                        <div class="meta-row">
+                            <span class="icon">🚀</span>
+                            <span>${rocketName}</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="icon">🏢</span>
+                            <span>${provider}</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="icon">📍</span>
+                            <span>${location}</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="icon">📅</span>
+                            <span>${date}</span>
+                        </div>
+                    </div>
+                    <span class="status-badge ${statusClass}">${statusName}</span>
+                    ${trajectoryBadgeHtml}
+                    ${chrisSaysHtml}
+                </div>
+            </div>
+        `;
+    });
+
+    html += '</div>';
+    content.innerHTML = html;
+}
+
+// =============================================
+// RENDER NEWS
+// =============================================
+function renderNews(articles) {
+    const content = document.getElementById('mainContent');
+
+    if (articles.length === 0) {
+        content.innerHTML = `
+            <div class="error-message">
+                <h2>📰 No news found</h2>
+            </div>
+        `;
+        return;
+    }
+
+    let html = '<div class="news-grid">';
+
+    articles.forEach(article => {
+        const imageUrl = article.image_url || 'https://via.placeholder.com/400x200/0a0a2e/666699?text=Space+News';
+        const date = article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        }) : '';
+
+        const summary = article.summary
+            ? (article.summary.length > 150 ? article.summary.substring(0, 150) + '...' : article.summary)
+            : '';
+
+        html += `
+            <div class="news-card">
+                <img src="${imageUrl}" alt="${article.title}" 
+                     onerror="this.src='https://via.placeholder.com/400x200/0a0a2e/666699?text=Space+News'">
+                <div class="news-card-body">
+                    <h3><a href="${article.url}" target="_blank">${article.title}</a></h3>
+                    <p>${summary}</p>
+                    <div class="news-date">📰 ${article.news_site || ''} · ${date}</div>
+                </div>
+            </div>
+        `;
+    });
+
+    html += '</div>';
+    content.innerHTML = html;
+}
+
+// =============================================
+// COUNTDOWN TIMER
+// =============================================
+function setupCountdown(launch) {
+    if (state.countdownInterval) {
+        clearInterval(state.countdownInterval);
+    }
+
+    document.getElementById('countdownName').textContent = launch.name || 'Unknown Mission';
+
+    if (!launch.net) {
+        document.getElementById('countdownTimer').innerHTML = '<p style="color: #aaaacc;">Launch time TBD</p>';
+        return;
+    }
+
+    state.nextLaunchDate = new Date(launch.net);
+    updateCountdown();
+    state.countdownInterval = setInterval(updateCountdown, 1000);
+}
+
+function updateCountdown() {
+    const now = new Date();
+    const diff = state.nextLaunchDate - now;
+
+    if (diff <= 0) {
+        document.getElementById('cd-days').textContent = '0';
+        document.getElementById('cd-hours').textContent = '0';
+        document.getElementById('cd-mins').textContent = '0';
+        document.getElementById('cd-secs').textContent = '0';
+        return;
+    }
+
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const secs = Math.floor((diff % (1000 * 60)) / 1000);
+
+    document.getElementById('cd-days').textContent = days;
+    document.getElementById('cd-hours').textContent = hours.toString().padStart(2, '0');
+    document.getElementById('cd-mins').textContent = mins.toString().padStart(2, '0');
+    document.getElementById('cd-secs').textContent = secs.toString().padStart(2, '0');
+}
+
+// =============================================
+// LAUNCH DETAIL MODAL (with Chris Says)
+// =============================================
+function openModal(index) {
+    const launch = state.filteredLaunches[index];
+    if (!launch) return;
+
+    const modal = document.getElementById('modalOverlay');
+    const imageUrl = launch.image || 'https://via.placeholder.com/700x300/0a0a2e/666699?text=No+Image';
+
+    document.getElementById('modalTitle').textContent = launch.name || 'Launch Details';
+    document.getElementById('modalImage').src = imageUrl;
+
+    const date = launch.net ? new Date(launch.net).toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZoneName: 'short'
+    }) : 'TBD';
+
+    const provider = launch.launch_service_provider?.name || 'Unknown';
+    const providerType = launch.launch_service_provider?.type || '';
+    const rocketName = launch.rocket?.configuration?.name || 'Unknown';
+    const rocketFamily = launch.rocket?.configuration?.family || '';
+    const padName = launch.pad?.name || 'Unknown';
+    const location = launch.pad?.location?.name || 'Unknown';
+    const statusName = launch.status?.name || 'Unknown';
+    const statusDesc = launch.status?.description || '';
+    const missionName = launch.mission?.name || 'N/A';
+    const missionDesc = launch.mission?.description || 'No mission description available.';
+    const missionType = launch.mission?.type || 'N/A';
+    const orbit = launch.mission?.orbit?.name || 'N/A';
+
+    // NEW: Get trajectory info for modal
+    const trajectoryInfo = getTrajectoryInfo(launch);
+    const chrisSaysModalHtml = renderChrisSaysModal(trajectoryInfo);
+
+    let webcastHtml = '';
+    if (launch.vidURLs && launch.vidURLs.length > 0) {
+        webcastHtml = '<div style="margin-top: 15px;"><strong>📺 Watch Live:</strong><br>';
+        launch.vidURLs.forEach(vid => {
+            webcastHtml += `<a href="${vid.url}" target="_blank" style="color: #ff6b35; margin-right: 10px;">${vid.title || 'Webcast'}</a> `;
+        });
+        webcastHtml += '</div>';
+    }
+
+    document.getElementById('modalBody').innerHTML = `
+        <h3>${missionName}</h3>
+        <p>${missionDesc}</p>
+
+        <div class="detail-grid">
+            <div class="detail-item">
+                <div class="detail-label">📅 Date</div>
+                <div class="detail-value">${date}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">📊 Status</div>
+                <div class="detail-value">${statusName}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">🚀 Rocket</div>
+                <div class="detail-value">${rocketName}${rocketFamily ? ' (' + rocketFamily + ')' : ''}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">🏢 Provider</div>
+                <div class="detail-value">${provider}${providerType ? ' (' + providerType + ')' : ''}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">📍 Launch Pad</div>
+                <div class="detail-value">${padName}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">🌍 Location</div>
+                <div class="detail-value">${location}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">🎯 Mission Type</div>
+                <div class="detail-value">${missionType}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">🌌 Orbit</div>
+                <div class="detail-value">${orbit}</div>
+            </div>
+        </div>
+
+        ${statusDesc ? `<p style="margin-top: 15px; font-size: 0.85em;"><em>${statusDesc}</em></p>` : ''}
+        ${webcastHtml}
+        ${chrisSaysModalHtml}
+    `;
+
+    modal.classList.add('open');
+}
+
+function closeModal(event) {
+    if (event.target === document.getElementById('modalOverlay')) {
+        document.getElementById('modalOverlay').classList.remove('open');
+    }
+}
+
+// =============================================
+// PAGINATION
+// =============================================
+function updatePagination() {
+    const pagination = document.getElementById('pagination');
+    const totalPages = Math.ceil(state.totalResults / RESULTS_PER_PAGE);
+
+    if (totalPages <= 1) {
+        pagination.style.display = 'none';
+        return;
+    }
+
+    pagination.style.display = 'flex';
+    document.getElementById('pageInfo').textContent = `Page ${state.currentPage} of ${totalPages}`;
+    document.getElementById('prevBtn').disabled = state.currentPage <= 1;
+    document.getElementById('nextBtn').disabled = state.currentPage >= totalPages;
+}
+
+function changePage(direction) {
+    state.currentPage += direction;
+    if (state.currentTab === 'news') {
+        loadNews();
+    } else {
+        loadLaunches();
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// =============================================
+// HELPER: Get CSS class for status badge
+// =============================================
+function getStatusClass(status) {
+    const s = status.toLowerCase();
+    if (s.includes('go for launch') || s.includes('go')) return 'status-go';
+    if (s.includes('tbd')) return 'status-tbd';
+    if (s.includes('tbc')) return 'status-tbc';
+    if (s.includes('success')) return 'status-success';
+    if (s.includes('fail') || s.includes('partial')) return 'status-failure';
+    return 'status-default';
+}
+
+// =============================================
+// INITIALIZE
+// =============================================
+document.addEventListener('DOMContentLoaded', async function() {
+    console.log('🚀 Chris The Rocket Guy is launching...');
+    console.log('💾 Cache system active — durations:', CACHE_DURATIONS);
+
+    // Load manual extras first, then launches
+    await loadLaunchExtras();
+    loadLaunches();
+});
