@@ -770,24 +770,46 @@ footer a {
     color: #aaaacc;
     font-size: 1em;
     line-height: 1.6;
-    margin-bottom: 20px;
+    margin-bottom: 25px;
+}
+
+.contact-links {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    flex-wrap: wrap;
 }
 
 .contact-btn {
     display: inline-block;
-    background: linear-gradient(135deg, #ff6b35, #ff4500);
     color: #ffffff;
     text-decoration: none;
-    padding: 14px 36px;
+    padding: 14px 32px;
     border-radius: 30px;
     font-family: 'Space Grotesk', sans-serif;
-    font-size: 1.1em;
+    font-size: 1.05em;
     font-weight: 600;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
-    box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
 }
 
 .contact-btn:hover {
     transform: translateY(-2px);
+}
+
+.email-btn {
+    background: linear-gradient(135deg, #ff6b35, #ff4500);
+    box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
+}
+
+.email-btn:hover {
     box-shadow: 0 6px 25px rgba(255, 107, 53, 0.5);
+}
+
+.facebook-btn {
+    background: linear-gradient(135deg, #1877f2, #0d5bbf);
+    box-shadow: 0 4px 15px rgba(24, 119, 242, 0.3);
+}
+
+.facebook-btn:hover {
+    box-shadow: 0 6px 25px rgba(24, 119, 242, 0.5);
 }
