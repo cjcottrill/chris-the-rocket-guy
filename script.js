@@ -1,5 +1,5 @@
 // =============================================
-// CHRIS THE ROCKET GUY - MAIN SCRIPT
+// CHRIS THE ROCKET GUY - MAIN SCRIPT (FIXED)
 // =============================================
 
 // =============================================
@@ -9,8 +9,7 @@ const API_BASE = 'https://ll.thespacedevs.com/2.2.0';
 const RESULTS_PER_PAGE = 12;
 
 // =============================================
-// LAUNCH EXTRAS - Manual overrides & notes
-// Loaded from launch-extras.json at startup
+// LAUNCH EXTRAS
 // =============================================
 let launchExtras = {};
 
@@ -52,26 +51,19 @@ function getSunsetTime(dateObj) {
 
     const dayOfYear = Math.floor((dateObj - new Date(dateObj.getFullYear(), 0, 0)) / 86400000);
 
-    // Solar declination
     const declination = -23.45 * Math.cos((360 / 365) * (dayOfYear + 10) * Math.PI / 180);
 
-    // Hour angle for sunset
     const latRad = lat * Math.PI / 180;
     const declRad = declination * Math.PI / 180;
     const hourAngle = Math.acos(-Math.tan(latRad) * Math.tan(declRad)) * 180 / Math.PI;
 
-    // Solar noon in UTC (approximate)
     const solarNoonUTC = 12 - (lng / 15);
-
-    // Sunset in UTC hours
     const sunsetUTC = solarNoonUTC + (hourAngle / 15);
 
-    // Convert to EST/EDT
     const isDST = isDaylightSavingTime(dateObj);
     const offset = isDST ? 4 : 5;
     const sunsetLocal = sunsetUTC - offset;
 
-    // Build a Date object for sunset on that day
     const sunset = new Date(dateObj);
     const sunsetHours = Math.floor(sunsetLocal);
     const sunsetMins = Math.round((sunsetLocal - sunsetHours) * 60);
@@ -88,7 +80,7 @@ function isDaylightSavingTime(date) {
 }
 
 function isBeforeSunset(launchDate) {
-    if (!launchDate) return true; // default to daytime tips
+    if (!launchDate) return true;
     const launch = new Date(launchDate);
     const sunset = getSunsetTime(launch);
     const isBefore = launch < sunset;
@@ -99,7 +91,6 @@ function isBeforeSunset(launchDate) {
 // =============================================
 // TRAJECTORY DETECTION ENGINE
 // =============================================
-
 function getTrajectoryInfo(launch) {
     const missionName = (launch.name || '').toLowerCase();
     const missionDesc = (launch.mission?.description || '').toLowerCase();
@@ -124,11 +115,12 @@ function getTrajectoryInfo(launch) {
         const groupNum = parseInt(starlinkMatch[1]);
 
         if ([6, 10, 12].includes(groupNum)) {
+            const seTips = buildSoutheastTips(launch.net);
             return {
                 trajectory: 'southeast',
-                direction: null,
+                direction: seTips.summary,
                 isRTLS: false,
-                chrisSays: null,
+                chrisSays: seTips,
                 videoUrl: null,
                 launchNet: launch.net || null,
                 source: 'auto-starlink'
@@ -217,7 +209,6 @@ function getTrajectoryInfo(launch) {
 // =============================================
 // BUILD SOUTHEAST STARLINK TIPS (time-aware)
 // =============================================
-
 function buildSoutheastTips(launchNet) {
     const daytime = isBeforeSunset(launchNet);
 
@@ -255,7 +246,6 @@ function buildSoutheastTips(launchNet) {
 // =============================================
 // BUILD CHRIS'S TIPS (non-southeast)
 // =============================================
-
 function buildStarlinkTips(direction, groupNum) {
     const dirText = direction === 'northeast'
         ? 'This Starlink mission heads NORTHEAST along the coast. From the beach, look to your LEFT.'
@@ -296,9 +286,7 @@ function buildRTLSTips(type) {
 // =============================================
 // RENDER "CHRIS SAYS" HTML (Card view)
 // =============================================
-
 function renderChrisSaysCard(trajectoryInfo) {
-    // Southeast gets special rendering
     if (trajectoryInfo.trajectory === 'southeast') {
         return renderSoutheastCard(trajectoryInfo);
     }
@@ -354,7 +342,7 @@ function renderChrisSaysCard(trajectoryInfo) {
 }
 
 function renderSoutheastCard(trajectoryInfo) {
-    const seTips = buildSoutheastTips(trajectoryInfo.launchNet);
+    const seTips = trajectoryInfo.chrisSays || buildSoutheastTips(trajectoryInfo.launchNet);
     const uniqueId = 'cs-' + Math.random().toString(36).substr(2, 9);
 
     let contentHtml = `
@@ -379,11 +367,9 @@ function renderSoutheastCard(trajectoryInfo) {
 }
 
 // =============================================
-// RENDER "CHRIS SAYS" HTML (Modal view - full detail)
+// RENDER "CHRIS SAYS" HTML (Modal view)
 // =============================================
-
 function renderChrisSaysModal(trajectoryInfo) {
-    // Southeast gets special full rendering
     if (trajectoryInfo.trajectory === 'southeast') {
         return renderSoutheastModal(trajectoryInfo);
     }
@@ -445,7 +431,7 @@ function renderChrisSaysModal(trajectoryInfo) {
 }
 
 function renderSoutheastModal(trajectoryInfo) {
-    const seTips = buildSoutheastTips(trajectoryInfo.launchNet);
+    const seTips = trajectoryInfo.chrisSays || buildSoutheastTips(trajectoryInfo.launchNet);
 
     let contentHtml = `
         <div class="tip-box">
@@ -454,7 +440,6 @@ function renderSoutheastModal(trajectoryInfo) {
         </div>
     `;
 
-    // Time-of-day section
     contentHtml += `
         <div class="tip-box">
             <div class="tip-label">${seTips.isDaytime ? '☀️ Daytime Launch' : '🌙 Night Launch'}</div>
@@ -462,7 +447,6 @@ function renderSoutheastModal(trajectoryInfo) {
         </div>
     `;
 
-    // Night launch bonus: entry burn detail
     if (!seTips.isDaytime && seTips.tips.length > 1) {
         contentHtml += `
             <div class="tip-box">
@@ -472,7 +456,6 @@ function renderSoutheastModal(trajectoryInfo) {
         `;
     }
 
-    // Balcony & beach viewing guide
     if (seTips.balconies) {
         contentHtml += `
             <div class="tip-box">
@@ -501,8 +484,8 @@ function toggleChrisSays(id, button) {
     const content = document.getElementById(id);
     const arrow = document.getElementById('arrow-' + id);
 
-    content.classList.toggle('open');
-    arrow.classList.toggle('open');
+    if (content) content.classList.toggle('open');
+    if (arrow) arrow.classList.toggle('open');
 }
 
 // =============================================
@@ -584,6 +567,7 @@ function setCachedData(key, data) {
 
 function showCacheIndicator(fromCache, type) {
     const indicator = document.getElementById('cacheIndicator');
+    if (!indicator) return;
     if (fromCache) {
         const maxAge = CACHE_DURATIONS[type] || 5;
         indicator.textContent = `⚡ Loaded instantly from cache (refreshes every ${maxAge} min)`;
@@ -615,26 +599,34 @@ let state = {
 };
 
 // =============================================
-// TAB SWITCHING
+// TAB SWITCHING (FIXED: event parameter)
 // =============================================
-function switchTab(tab) {
+function switchTab(tab, evt) {
     state.currentTab = tab;
     state.currentPage = 1;
     state.statusFilter = 'all';
     state.searchQuery = '';
 
     document.querySelectorAll('nav button').forEach(btn => btn.classList.remove('active'));
-    event.target.classList.add('active');
+    if (evt && evt.target) {
+        evt.target.classList.add('active');
+    }
 
-    document.getElementById('searchInput').value = '';
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) searchInput.value = '';
 
     document.querySelectorAll('.status-filters button').forEach(btn => btn.classList.remove('active'));
-    document.querySelector('.status-filters button:first-child').classList.add('active');
+    const firstFilter = document.querySelector('.status-filters button:first-child');
+    if (firstFilter) firstFilter.classList.add('active');
 
     const isNews = tab === 'news';
-    document.getElementById('countdownSection').style.display = tab === 'upcoming' ? 'block' : 'none';
-    document.getElementById('searchContainer').style.display = isNews ? 'none' : 'block';
-    document.getElementById('statusFilters').style.display = isNews ? 'none' : 'flex';
+    const countdownSection = document.getElementById('countdownSection');
+    const searchContainer = document.getElementById('searchContainer');
+    const statusFilters = document.getElementById('statusFilters');
+
+    if (countdownSection) countdownSection.style.display = tab === 'upcoming' ? 'block' : 'none';
+    if (searchContainer) searchContainer.style.display = isNews ? 'none' : 'block';
+    if (statusFilters) statusFilters.style.display = isNews ? 'none' : 'flex';
 
     if (isNews) {
         loadNews();
@@ -644,11 +636,16 @@ function switchTab(tab) {
 }
 
 // =============================================
-// LOAD LAUNCHES FROM API (with caching)
+// LOAD LAUNCHES FROM API
 // =============================================
 async function loadLaunches() {
     const content = document.getElementById('mainContent');
     const pagination = document.getElementById('pagination');
+
+    if (!content) {
+        console.error('❌ mainContent element not found');
+        return;
+    }
 
     const cacheKey = getCacheKey(state.currentTab, state.currentPage);
     const cachedData = getCachedData(cacheKey, state.currentTab);
@@ -675,7 +672,7 @@ async function loadLaunches() {
             <p>Fetching launch data from the cosmos...</p>
         </div>
     `;
-    pagination.style.display = 'none';
+    if (pagination) pagination.style.display = 'none';
 
     try {
         const offset = (state.currentPage - 1) * RESULTS_PER_PAGE;
@@ -739,11 +736,13 @@ async function loadLaunches() {
 }
 
 // =============================================
-// LOAD NEWS (with caching)
+// LOAD NEWS
 // =============================================
 async function loadNews() {
     const content = document.getElementById('mainContent');
     const pagination = document.getElementById('pagination');
+
+    if (!content) return;
 
     const cacheKey = getCacheKey('news', state.currentPage);
     const cachedData = getCachedData(cacheKey, 'news');
@@ -765,7 +764,7 @@ async function loadNews() {
             <p>Fetching space news...</p>
         </div>
     `;
-    pagination.style.display = 'none';
+    if (pagination) pagination.style.display = 'none';
 
     try {
         const offset = (state.currentPage - 1) * RESULTS_PER_PAGE;
@@ -801,15 +800,18 @@ async function loadNews() {
 // SEARCH & FILTER
 // =============================================
 function handleSearch() {
-    state.searchQuery = document.getElementById('searchInput').value.toLowerCase();
+    const searchInput = document.getElementById('searchInput');
+    state.searchQuery = searchInput ? searchInput.value.toLowerCase() : '';
     applyFilters();
 }
 
-function setStatusFilter(filter) {
+function setStatusFilter(filter, evt) {
     state.statusFilter = filter;
 
     document.querySelectorAll('.status-filters button').forEach(btn => btn.classList.remove('active'));
-    event.target.classList.add('active');
+    if (evt && evt.target) {
+        evt.target.classList.add('active');
+    }
 
     applyFilters();
 }
@@ -830,14 +832,14 @@ function applyFilters() {
             const provider = (launch.launch_service_provider?.name || '').toLowerCase();
             const pad = (launch.pad?.name || '').toLowerCase();
             const location = (launch.pad?.location?.name || '').toLowerCase();
-            const rocketName = (launch.rocket?.configuration?.name || '').toLowerCase();
+            const rocketNameStr = (launch.rocket?.configuration?.name || '').toLowerCase();
             const query = state.searchQuery;
 
             return name.includes(query) ||
                    provider.includes(query) ||
                    pad.includes(query) ||
                    location.includes(query) ||
-                   rocketName.includes(query);
+                   rocketNameStr.includes(query);
         });
     }
 
@@ -851,6 +853,7 @@ function applyFilters() {
 // =============================================
 function renderLaunches(launches) {
     const content = document.getElementById('mainContent');
+    if (!content) return;
 
     if (launches.length === 0) {
         content.innerHTML = `
@@ -879,7 +882,7 @@ function renderLaunches(launches) {
         const statusClass = getStatusClass(statusName);
         const provider = launch.launch_service_provider?.name || 'Unknown Provider';
         const location = launch.pad?.location?.name || 'Unknown Location';
-        const rocketName = launch.rocket?.configuration?.name || 'Unknown Rocket';
+        const rocketDisplayName = launch.rocket?.configuration?.name || 'Unknown Rocket';
 
         const trajectoryInfo = getTrajectoryInfo(launch);
         const trajectoryBadgeHtml = renderTrajectoryBadge(trajectoryInfo);
@@ -894,7 +897,7 @@ function renderLaunches(launches) {
                     <div class="launch-meta">
                         <div class="meta-row">
                             <span class="icon">🚀</span>
-                            <span>${rocketName}</span>
+                            <span>${rocketDisplayName}</span>
                         </div>
                         <div class="meta-row">
                             <span class="icon">🏢</span>
@@ -926,6 +929,7 @@ function renderLaunches(launches) {
 // =============================================
 function renderNews(articles) {
     const content = document.getElementById('mainContent');
+    if (!content) return;
 
     if (articles.length === 0) {
         content.innerHTML = `
@@ -987,24 +991,16 @@ function setupCountdown(launch) {
     const minsEl = document.getElementById('cd-mins');
     const secsEl = document.getElementById('cd-secs');
 
-    console.log('⏱️ DOM check — countdownName:', !!nameEl);
-    console.log('⏱️ DOM check — cd-days:', !!daysEl);
-    console.log('⏱️ DOM check — cd-hours:', !!hoursEl);
-    console.log('⏱️ DOM check — cd-mins:', !!minsEl);
-    console.log('⏱️ DOM check — cd-secs:', !!secsEl);
-
     if (!nameEl || !daysEl || !hoursEl || !minsEl || !secsEl) {
         console.error('❌ COUNTDOWN DOM ELEMENTS MISSING — cannot start timer');
         return;
     }
 
     nameEl.textContent = launch.name || 'Unknown Mission';
-    console.log('⏱️ Set countdown name to:', nameEl.textContent);
 
     const section = document.getElementById('countdownSection');
     if (section) {
         section.style.display = 'block';
-        console.log('⏱️ Countdown section visibility: block');
     }
 
     if (!launch.net) {
@@ -1017,8 +1013,6 @@ function setupCountdown(launch) {
     }
 
     state.nextLaunchDate = new Date(launch.net);
-    console.log('⏱️ Parsed launch date:', state.nextLaunchDate);
-    console.log('⏱️ Launch date valid:', !isNaN(state.nextLaunchDate.getTime()));
 
     if (isNaN(state.nextLaunchDate.getTime())) {
         console.error('❌ Invalid date from NET:', launch.net);
@@ -1044,7 +1038,6 @@ function updateCountdown() {
     const secsEl = document.getElementById('cd-secs');
 
     if (!daysEl || !hoursEl || !minsEl || !secsEl) {
-        console.error('❌ Countdown elements disappeared from DOM');
         if (state.countdownInterval) {
             clearInterval(state.countdownInterval);
             state.countdownInterval = null;
@@ -1060,7 +1053,6 @@ function updateCountdown() {
         if (state.countdownInterval) {
             clearInterval(state.countdownInterval);
             state.countdownInterval = null;
-            console.log('⏱️ Countdown reached zero — stopped');
         }
         return;
     }
@@ -1084,14 +1076,18 @@ function openModal(index) {
     if (!launch) return;
 
     console.log('🔍 Modal opened for:', launch.name);
-    console.log('🔍 Launch ID:', launch.id);
-    console.log('🔍 Launch slug:', launch.slug);
 
     const modal = document.getElementById('modalOverlay');
+    if (!modal) return;
+
     const imageUrl = launch.image || 'https://via.placeholder.com/700x300/0a0a2e/666699?text=No+Image';
 
-    document.getElementById('modalTitle').textContent = launch.name || 'Launch Details';
-    document.getElementById('modalImage').src = imageUrl;
+    const modalTitle = document.getElementById('modalTitle');
+    const modalImage = document.getElementById('modalImage');
+    const modalBody = document.getElementById('modalBody');
+
+    if (modalTitle) modalTitle.textContent = launch.name || 'Launch Details';
+    if (modalImage) modalImage.src = imageUrl;
 
     const date = launch.net ? new Date(launch.net).toLocaleDateString('en-US', {
         weekday: 'long',
@@ -1105,7 +1101,7 @@ function openModal(index) {
 
     const provider = launch.launch_service_provider?.name || 'Unknown';
     const providerType = launch.launch_service_provider?.type || '';
-    const rocketName = launch.rocket?.configuration?.name || 'Unknown';
+    const rocketDisplayName = launch.rocket?.configuration?.name || 'Unknown';
     const rocketFamily = launch.rocket?.configuration?.family || '';
     const padName = launch.pad?.name || 'Unknown';
     const location = launch.pad?.location?.name || 'Unknown';
@@ -1122,7 +1118,6 @@ function openModal(index) {
     // ---- BUILD WATCH LIVE SECTION ----
     let webcastHtml = '';
 
-    // Check for manual video URL from launch-extras.json
     if (trajectoryInfo.videoUrl) {
         webcastHtml = `
             <div style="margin-top: 20px;">
@@ -1135,77 +1130,98 @@ function openModal(index) {
         `;
     }
 
-    // Also include any API-provided video URLs
-    if (launch.vidURLs && launch.vidURLs.length > 0) {
+    // FIX: LL2 API uses vid_urls (snake_case), not vidURLs
+    const vidUrls = launch.vid_urls || launch.vidURLs || [];
+    if (vidUrls.length > 0) {
         if (!webcastHtml) {
             webcastHtml = '<div style="margin-top: 20px;"><strong>📺 Watch Live:</strong><br>';
         } else {
             webcastHtml += '<div style="margin-top: 10px;">';
         }
-        launch.vidURLs.forEach(vid => {
-            webcastHtml += `<a href="${vid.url}" target="_blank" style="color: #ff6b35; margin-right: 10px;">${vid.title || 'Webcast'}</a> `;
+        vidUrls.forEach(vid => {
+            const vidUrl = vid.url || vid;
+            const vidTitle = vid.title || vid.name || 'Webcast';
+            webcastHtml += `<a href="${vidUrl}" target="_blank" style="color: #ff6b35; margin-right: 10px;">${vidTitle}</a> `;
         });
         webcastHtml += '</div>';
     }
 
-    document.getElementById('modalBody').innerHTML = `
-        <h3>${missionName}</h3>
-        <p>${missionDesc}</p>
+    if (modalBody) {
+        modalBody.innerHTML = `
+            <h3>${missionName}</h3>
+            <p>${missionDesc}</p>
 
-        <div class="detail-grid">
-            <div class="detail-item">
-                <div class="detail-label">📅 Date</div>
-                <div class="detail-value">${date}</div>
+            <div class="detail-grid">
+                <div class="detail-item">
+                    <div class="detail-label">📅 Date</div>
+                    <div class="detail-value">${date}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">📊 Status</div>
+                    <div class="detail-value">${statusName}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">🚀 Rocket</div>
+                    <div class="detail-value">${rocketDisplayName}${rocketFamily ? ' (' + rocketFamily + ')' : ''}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">🏢 Provider</div>
+                    <div class="detail-value">${provider}${providerType ? ' (' + providerType + ')' : ''}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">📍 Launch Pad</div>
+                    <div class="detail-value">${padName}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">🌍 Location</div>
+                    <div class="detail-value">${location}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">🎯 Mission Type</div>
+                    <div class="detail-value">${missionType}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">🌌 Orbit</div>
+                    <div class="detail-value">${orbit}</div>
+                </div>
             </div>
-            <div class="detail-item">
-                <div class="detail-label">📊 Status</div>
-                <div class="detail-value">${statusName}</div>
-            </div>
-            <div class="detail-item">
-                <div class="detail-label">🚀 Rocket</div>
-                <div class="detail-value">${rocketName}${rocketFamily ? ' (' + rocketFamily + ')' : ''}</div>
-            </div>
-            <div class="detail-item">
-                <div class="detail-label">🏢 Provider</div>
-                <div class="detail-value">${provider}${providerType ? ' (' + providerType + ')' : ''}</div>
-            </div>
-            <div class="detail-item">
-                <div class="detail-label">📍 Launch Pad</div>
-                <div class="detail-value">${padName}</div>
-            </div>
-            <div class="detail-item">
-                <div class="detail-label">🌍 Location</div>
-                <div class="detail-value">${location}</div>
-            </div>
-            <div class="detail-item">
-                <div class="detail-label">🎯 Mission Type</div>
-                <div class="detail-value">${missionType}</div>
-            </div>
-            <div class="detail-item">
-                <div class="detail-label">🌌 Orbit</div>
-                <div class="detail-value">${orbit}</div>
-            </div>
-        </div>
 
-        ${statusDesc ? `<p style="margin-top: 15px; font-size: 0.85em;"><em>${statusDesc}</em></p>` : ''}
-        ${webcastHtml}
-        ${chrisSaysModalHtml}
-    `;
+            ${statusDesc ? `<p style="margin-top: 15px; font-size: 0.85em;"><em>${statusDesc}</em></p>` : ''}
+            ${webcastHtml}
+            ${chrisSaysModalHtml}
+        `;
+    }
 
     modal.classList.add('open');
 }
 
 function closeModal(event) {
-    if (event.target === document.getElementById('modalOverlay')) {
-        document.getElementById('modalOverlay').classList.remove('open');
+    const modal = document.getElementById('modalOverlay');
+    if (!modal) return;
+
+    // Close if clicking overlay background OR a close button
+    if (!event || event.target === modal || event.target.classList.contains('modal-close')) {
+        modal.classList.remove('open');
     }
 }
+
+// Also close on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('modalOverlay');
+        if (modal && modal.classList.contains('open')) {
+            modal.classList.remove('open');
+        }
+    }
+});
 
 // =============================================
 // PAGINATION
 // =============================================
 function updatePagination() {
     const pagination = document.getElementById('pagination');
+    if (!pagination) return;
+
     const totalPages = Math.ceil(state.totalResults / RESULTS_PER_PAGE);
 
     if (totalPages <= 1) {
@@ -1214,9 +1230,14 @@ function updatePagination() {
     }
 
     pagination.style.display = 'flex';
-    document.getElementById('pageInfo').textContent = `Page ${state.currentPage} of ${totalPages}`;
-    document.getElementById('prevBtn').disabled = state.currentPage <= 1;
-    document.getElementById('nextBtn').disabled = state.currentPage >= totalPages;
+
+    const pageInfo = document.getElementById('pageInfo');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+
+    if (pageInfo) pageInfo.textContent = `Page ${state.currentPage} of ${totalPages}`;
+    if (prevBtn) prevBtn.disabled = state.currentPage <= 1;
+    if (nextBtn) nextBtn.disabled = state.currentPage >= totalPages;
 }
 
 function changePage(direction) {
@@ -1230,7 +1251,7 @@ function changePage(direction) {
 }
 
 // =============================================
-// HELPER: Get CSS class for status badge
+// HELPER: Status badge CSS class
 // =============================================
 function getStatusClass(status) {
     const s = status.toLowerCase();
