@@ -478,7 +478,9 @@ nav button.active {
     margin-top: 30px;
     margin-bottom: 30px;
     overflow: hidden;
+    position: relative;
 }
+
 
 .modal-header {
     display: flex;
@@ -843,6 +845,3 @@ footer a {
     background: rgba(255, 255, 255, 0.2);
 }
 
-.modal-content {
-    position: relative;
-}
