@@ -1,6 +1,20 @@
 {
     "_README": "Manual overrides for launches. Use launch ID or slug as the key. These override auto-detection.",
 
+    "starlink-6-104": {
+        "trajectory": "southeast",
+        "direction": "👉 Look RIGHT from the beach",
+        "rtls": false,
+        "video_url": "https://www.youtube.com/live/ybbp7LwLNRA?si=P8ZcgVtiht-ivQID",
+        "chrisSays": {
+            "summary": "Another Starlink mission heading Southeast from the Cape!",
+            "tips": [
+                "Look to the RIGHT (south) from the beach.",
+                "The booster will land on a drone ship at sea — no sonic boom this time."
+            ]
+        }
+    },
+
     "example-launch-id-here": {
         "trajectory": "southeast",
         "direction": "👉 Look RIGHT from the beach",
