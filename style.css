@@ -87,7 +87,7 @@ nav button.active {
 }
 
 /* --- COUNTDOWN SECTION --- */
-.next-launch-countdown {
+.countdown-section {
     background: linear-gradient(135deg, #1a1a4e, #2a1a4e);
     border: 1px solid #ff6b35;
     border-radius: 15px;
@@ -97,42 +97,46 @@ nav button.active {
     text-align: center;
 }
 
-.next-launch-countdown h2 {
+.countdown-section h2 {
     color: #ff6b35;
-    margin-bottom: 5px;
-    font-size: 1.1em;
-}
-
-.next-launch-countdown .mission-name {
-    font-size: 1.4em;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.2em;
     margin-bottom: 15px;
 }
 
-.countdown-timer {
+.countdown-grid {
     display: flex;
     justify-content: center;
     gap: 15px;
     flex-wrap: wrap;
 }
 
-.countdown-unit {
+.cd-block {
     background: #0a0a2e;
     border-radius: 10px;
-    padding: 10px 15px;
-    min-width: 70px;
+    padding: 12px 18px;
+    min-width: 75px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
-.countdown-unit .number {
-    font-size: 2em;
-    font-weight: bold;
+.cd-number {
+    font-family: 'Orbitron', monospace;
+    font-size: 2.2em;
+    font-weight: 700;
     color: #ff6b35;
+    line-height: 1.2;
 }
 
-.countdown-unit .label {
+.cd-label {
     font-size: 0.75em;
     color: #aaaacc;
     text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 4px;
 }
+
 
 /* --- STATUS FILTER TABS --- */
 .status-filters {
@@ -747,10 +751,16 @@ footer a {
         grid-template-columns: 1fr;
     }
 
-    .countdown-unit .number {
+    .cd-number {
         font-size: 1.5em;
     }
+
+    .cd-block {
+        min-width: 60px;
+        padding: 10px 14px;
+    }
 }
+
 /* ============ CONTACT SECTION ============ */
 .contact-section {
     text-align: center;
