@@ -1,767 +1,1060 @@
-// ==========================================
-// Chris The Rocket Guy - Launch Tracker
-// script.js - MATCHED TO index.html
-// ==========================================
+// =============================================
+// CHRIS THE ROCKET GUY - MAIN SCRIPT
+// =============================================
 
-var LL2_API_BASE = "https://ll.thespacedevs.com/2.2.0";
-var SNAPI_BASE = "https://api.spaceflightnewsapi.net/v4";
-var FLORIDA_LOCATION_IDS = "12,27";
-var LAUNCH_FETCH_LIMIT = 50;
+// =============================================
+// CONFIGURATION
+// =============================================
+const API_BASE = 'https://ll.thespacedevs.com/2.2.0';
+const RESULTS_PER_PAGE = 12;
 
-var allLaunches = [];
-var filteredLaunches = [];
-var currentTab = "upcoming";
-var currentStatusFilter = "all";
-var searchQuery = "";
-var launchExtras = {};
-var countdownInterval = null;
-var nextLaunch = null;
-var currentPage = 1;
-var perPage = 12;
+// =============================================
+// LAUNCH EXTRAS - Manual overrides & notes
+// Loaded from launch-extras.json at startup
+// =============================================
+let launchExtras = {};
 
-// ---- INIT ----
-document.addEventListener("DOMContentLoaded", function () {
-    console.log("DOM ready");
-    loadLaunchExtras();
-    fetchLaunches();
-});
-
-// ---- GLOBAL FUNCTIONS CALLED BY onclick IN HTML ----
-
-function switchTab(tab, evt) {
-    currentTab = tab;
-    currentPage = 1;
-
-    // Update nav button styling
-    var navBtns = document.querySelectorAll("header nav button");
-    for (var i = 0; i < navBtns.length; i++) {
-        navBtns[i].classList.remove("active");
+async function loadLaunchExtras() {
+    try {
+        const response = await fetch('launch-extras.json');
+        if (!response.ok) throw new Error('No extras file found');
+        launchExtras = await response.json();
+        console.log('📋 Loaded launch-extras.json —', Object.keys(launchExtras).length, 'entries');
+    } catch (error) {
+        console.log('📋 No launch-extras.json found — using auto-detection only');
+        launchExtras = {};
     }
-    if (evt && evt.target) {
-        evt.target.classList.add("active");
+}
+
+// =============================================
+// LAUNCH EXTRAS LOOKUP HELPER
+// =============================================
+function findLaunchExtras(launch) {
+    const launchId = launch.id || '';
+    const slug = launch.slug || '';
+    const nameSlug = (launch.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+    const extras = launchExtras[launchId] || launchExtras[slug] || launchExtras[nameSlug];
+
+    if (extras) {
+        console.log(`📋 Found extras for "${launch.name}" via key match`);
     }
 
-    // Show/hide controls based on tab
-    var searchContainer = document.getElementById("searchContainer");
-    var statusFilters = document.getElementById("statusFilters");
-    var pagination = document.getElementById("pagination");
-    var countdownSection = document.getElementById("countdownSection");
+    return extras || null;
+}
 
-    if (tab === "news") {
-        if (searchContainer) searchContainer.style.display = "none";
-        if (statusFilters) statusFilters.style.display = "none";
-        if (pagination) pagination.style.display = "none";
-        if (countdownSection) countdownSection.style.display = "none";
-        fetchNews();
+// =============================================
+// TRAJECTORY DETECTION ENGINE
+// =============================================
+
+function getTrajectoryInfo(launch) {
+    const missionName = (launch.name || '').toLowerCase();
+    const missionDesc = (launch.mission?.description || '').toLowerCase();
+    const rocketName = (launch.rocket?.configuration?.name || '').toLowerCase();
+
+    const extras = findLaunchExtras(launch);
+
+    if (extras) {
+        return {
+            trajectory: extras.trajectory || null,
+            direction: extras.direction || null,
+            isRTLS: extras.rtls || false,
+            chrisSays: extras.chrisSays || null,
+            videoUrl: extras.video_url || null,
+            source: 'manual'
+        };
+    }
+
+    const starlinkMatch = missionName.match(/starlink\s+group\s+(\d+)/i);
+    if (starlinkMatch) {
+        const groupNum = parseInt(starlinkMatch[1]);
+
+        if ([6, 12].includes(groupNum)) {
+            return {
+                trajectory: 'southeast',
+                direction: '👉 Look RIGHT from the beach',
+                isRTLS: false,
+                chrisSays: buildStarlinkTips('southeast', groupNum),
+                videoUrl: null,
+                source: 'auto-starlink'
+            };
+        }
+
+        if ([8, 10].includes(groupNum)) {
+            return {
+                trajectory: 'northeast',
+                direction: '👈 Look LEFT from the beach',
+                isRTLS: false,
+                chrisSays: buildStarlinkTips('northeast', groupNum),
+                videoUrl: null,
+                source: 'auto-starlink'
+            };
+        }
+
+        if ([9, 11].includes(groupNum)) {
+            return {
+                trajectory: 'vandenberg',
+                direction: 'Launches from California — not visible from Florida',
+                isRTLS: false,
+                chrisSays: null,
+                videoUrl: null,
+                source: 'auto-starlink'
+            };
+        }
+
+        return {
+            trajectory: 'unknown',
+            direction: null,
+            isRTLS: false,
+            chrisSays: 'This is a Starlink mission. Watch for the first stage landing on the drone ship about 8.5 minutes after launch!',
+            videoUrl: null,
+            source: 'auto-starlink'
+        };
+    }
+
+    const isCrewMission = /crew[\s-]*\d/i.test(missionName) ||
+                          /crew\s+dragon/i.test(missionName) ||
+                          missionName.includes('uscv') ||
+                          (missionDesc.includes('crew') && missionDesc.includes('station'));
+
+    if (isCrewMission && rocketName.includes('falcon')) {
+        return {
+            trajectory: 'northeast',
+            direction: '👈 Look LEFT from the beach',
+            isRTLS: true,
+            chrisSays: buildRTLSTips('crew'),
+            videoUrl: null,
+            source: 'auto-crew'
+        };
+    }
+
+    const isHeavy = rocketName.includes('falcon heavy');
+    if (isHeavy) {
+        return {
+            trajectory: 'variable',
+            direction: null,
+            isRTLS: true,
+            chrisSays: buildRTLSTips('heavy'),
+            videoUrl: null,
+            source: 'auto-heavy'
+        };
+    }
+
+    return {
+        trajectory: null,
+        direction: null,
+        isRTLS: false,
+        chrisSays: null,
+        videoUrl: null,
+        source: 'none'
+    };
+}
+
+// =============================================
+// BUILD CHRIS'S TIPS
+// =============================================
+
+function buildStarlinkTips(direction, groupNum) {
+    const dirText = direction === 'southeast'
+        ? 'This Starlink mission heads SOUTHEAST over the ocean. From the beach, look to your RIGHT.'
+        : 'This Starlink mission heads NORTHEAST along the coast. From the beach, look to your LEFT.';
+
+    return {
+        summary: dirText,
+        tips: [
+            'The rocket will be visible for about 3-4 minutes after launch.',
+            'Watch for stage separation — you\'ll see the second stage engine ignite as a bright dot pulling away.',
+            'The first stage will land on a drone ship in the Atlantic about 8.5 minutes after launch.',
+            'Best spot: anywhere on the beach with a clear view of the horizon toward the launch pads.'
+        ]
+    };
+}
+
+function buildRTLSTips(type) {
+    const intro = type === 'crew'
+        ? 'This is a crew mission! The booster comes BACK to the Cape — you get a double show!'
+        : 'This is a Falcon Heavy mission! The side boosters often come BACK to the Cape — double sonic booms!';
+
+    return {
+        summary: intro,
+        tips: [
+            'The booster returns to Landing Zone 1, right at the Cape.',
+            'Listen for the sonic boom around T+8 to 9 minutes — it\'s LOUD!',
+            'You\'ll hear the engines roar TWICE — once at launch, once at landing.'
+        ],
+        rtlsTimeline: [
+            { time: 'T+2:30', desc: 'Stage separation — look for the "SpaceX Nebula" (puff of gas in the sky)' },
+            { time: 'T+6:30', desc: 'Entry burn — 3 engines light up at ~40 miles altitude' },
+            { time: 'T+8:30', desc: 'Landing burn — single engine, about 2 miles from the pad' },
+            { time: 'T+9:00', desc: '💥 SONIC BOOM + engine roar — you\'ll feel it in your chest!' }
+        ]
+    };
+}
+
+// =============================================
+// RENDER "CHRIS SAYS" HTML
+// =============================================
+
+function renderChrisSaysCard(trajectoryInfo) {
+    if (!trajectoryInfo.chrisSays && !trajectoryInfo.direction) return '';
+
+    const info = trajectoryInfo.chrisSays;
+    const uniqueId = 'cs-' + Math.random().toString(36).substr(2, 9);
+
+    let contentHtml = '';
+
+    if (trajectoryInfo.direction) {
+        contentHtml += `
+            <div class="tip-box">
+                <div class="tip-label">📍 Where to Look</div>
+                <p>${trajectoryInfo.direction}</p>
+            </div>
+        `;
+    }
+
+    if (info && info.summary) {
+        contentHtml += `<p>${info.summary}</p>`;
+    }
+
+    if (info && info.tips && info.tips.length > 0) {
+        contentHtml += `<p>💡 ${info.tips[0]}</p>`;
+    }
+
+    if (info && info.rtlsTimeline) {
+        contentHtml += `
+            <div class="rtls-timeline">
+                ${info.rtlsTimeline.map(event => `
+                    <div class="rtls-event">
+                        <span class="rtls-time">${event.time}</span>
+                        <span class="rtls-desc">${event.desc}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    return `
+        <div class="chris-says" onclick="event.stopPropagation()">
+            <button class="chris-says-toggle" onclick="toggleChrisSays('${uniqueId}', this)">
+                <span class="arrow" id="arrow-${uniqueId}">▶</span>
+                🎙️ Chris says...
+            </button>
+            <div class="chris-says-content" id="${uniqueId}">
+                ${contentHtml}
+            </div>
+        </div>
+    `;
+}
+
+function renderChrisSaysModal(trajectoryInfo) {
+    if (!trajectoryInfo.chrisSays && !trajectoryInfo.direction) return '';
+
+    const info = trajectoryInfo.chrisSays;
+
+    let contentHtml = '';
+
+    if (trajectoryInfo.direction) {
+        contentHtml += `
+            <div class="tip-box">
+                <div class="tip-label">📍 Where to Look</div>
+                <p>${trajectoryInfo.direction}</p>
+            </div>
+        `;
+    }
+
+    if (trajectoryInfo.isRTLS) {
+        contentHtml += `
+            <div class="tip-box">
+                <div class="tip-label">🔁 Return to Launch Site</div>
+                <p>The booster lands back at the Cape — watch AND listen!</p>
+            </div>
+        `;
+    }
+
+    if (info && info.summary) {
+        contentHtml += `<p>${info.summary}</p>`;
+    }
+
+    if (info && info.tips) {
+        info.tips.forEach(tip => {
+            contentHtml += `<p>💡 ${tip}</p>`;
+        });
+    }
+
+    if (info && info.rtlsTimeline) {
+        contentHtml += `
+            <div class="rtls-timeline">
+                <div class="tip-label" style="margin-bottom: 6px;">⏱️ RTLS Timeline</div>
+                ${info.rtlsTimeline.map(event => `
+                    <div class="rtls-event">
+                        <span class="rtls-time">${event.time}</span>
+                        <span class="rtls-desc">${event.desc}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    return `
+        <div class="modal-chris-says">
+            <h4>🎙️ Chris Says...</h4>
+            ${contentHtml}
+        </div>
+    `;
+}
+
+function toggleChrisSays(id, button) {
+    const content = document.getElementById(id);
+    const arrow = document.getElementById('arrow-' + id);
+
+    content.classList.toggle('open');
+    arrow.classList.toggle('open');
+}
+
+// =============================================
+// TRAJECTORY BADGE HTML
+// =============================================
+function renderTrajectoryBadge(trajectoryInfo) {
+    if (!trajectoryInfo.trajectory) return '';
+
+    let badgeClass = '';
+    let badgeText = '';
+
+    switch (trajectoryInfo.trajectory) {
+        case 'southeast':
+            badgeClass = 'trajectory-southeast';
+            badgeText = '↗ SE Trajectory';
+            break;
+        case 'northeast':
+            badgeClass = 'trajectory-northeast';
+            badgeText = '↗ NE Trajectory';
+            break;
+        case 'variable':
+            badgeClass = 'trajectory-northeast';
+            badgeText = '↕ Variable';
+            break;
+        default:
+            return '';
+    }
+
+    let html = `<span class="trajectory-badge ${badgeClass}">${badgeText}</span>`;
+
+    if (trajectoryInfo.isRTLS) {
+        html += `<span class="trajectory-badge trajectory-rtls">🔁 RTLS</span>`;
+    }
+
+    return html;
+}
+
+// =============================================
+// CACHE SYSTEM
+// =============================================
+const cache = {};
+
+const CACHE_DURATIONS = {
+    upcoming: 5,
+    previous: 30,
+    news: 15
+};
+
+function getCacheKey(type, page) {
+    return `${type}_page${page}`;
+}
+
+function getCachedData(key, type) {
+    const cached = cache[key];
+    if (!cached) return null;
+
+    const now = Date.now();
+    const ageInMinutes = (now - cached.timestamp) / 1000 / 60;
+    const maxAge = CACHE_DURATIONS[type] || 5;
+
+    if (ageInMinutes < maxAge) {
+        const remainingMins = Math.round(maxAge - ageInMinutes);
+        console.log(`💾 Cache HIT for "${key}" — ${remainingMins} min until refresh`);
+        return cached.data;
     } else {
-        if (searchContainer) searchContainer.style.display = "";
-        if (statusFilters) statusFilters.style.display = "";
-        if (countdownSection) countdownSection.style.display = "";
+        console.log(`🗑️ Cache EXPIRED for "${key}" — fetching fresh data`);
+        delete cache[key];
+        return null;
+    }
+}
+
+function setCachedData(key, data) {
+    cache[key] = {
+        data: data,
+        timestamp: Date.now()
+    };
+    console.log(`💾 Cached "${key}" — ${Object.keys(cache).length, 'items in cache'}`);
+}
+
+function showCacheIndicator(fromCache, type) {
+    const indicator = document.getElementById('cacheIndicator');
+    if (fromCache) {
+        const maxAge = CACHE_DURATIONS[type] || 5;
+        indicator.textContent = `⚡ Loaded instantly from cache (refreshes every ${maxAge} min)`;
+        indicator.className = 'cache-indicator from-cache';
+    } else {
+        indicator.textContent = `🌐 Fetched fresh data from API`;
+        indicator.className = 'cache-indicator';
+    }
+    setTimeout(() => {
+        indicator.textContent = '';
+    }, 3000);
+}
+
+// =============================================
+// APPLICATION STATE
+// =============================================
+let state = {
+    currentTab: 'upcoming',
+    currentPage: 1,
+    totalResults: 0,
+    nextUrl: null,
+    previousUrl: null,
+    launches: [],
+    filteredLaunches: [],
+    statusFilter: 'all',
+    searchQuery: '',
+    nextLaunchDate: null,
+    countdownInterval: null
+};
+
+// =============================================
+// TAB SWITCHING
+// =============================================
+function switchTab(tab) {
+    state.currentTab = tab;
+    state.currentPage = 1;
+    state.statusFilter = 'all';
+    state.searchQuery = '';
+
+    document.querySelectorAll('nav button').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+
+    document.getElementById('searchInput').value = '';
+
+    document.querySelectorAll('.status-filters button').forEach(btn => btn.classList.remove('active'));
+    document.querySelector('.status-filters button:first-child').classList.add('active');
+
+    const isNews = tab === 'news';
+    document.getElementById('countdownSection').style.display = tab === 'upcoming' ? 'block' : 'none';
+    document.getElementById('searchContainer').style.display = isNews ? 'none' : 'block';
+    document.getElementById('statusFilters').style.display = isNews ? 'none' : 'flex';
+
+    if (isNews) {
+        loadNews();
+    } else {
+        loadLaunches();
+    }
+}
+
+// =============================================
+// LOAD LAUNCHES FROM API (with caching)
+// =============================================
+async function loadLaunches() {
+    const content = document.getElementById('mainContent');
+    const pagination = document.getElementById('pagination');
+
+    const cacheKey = getCacheKey(state.currentTab, state.currentPage);
+    const cachedData = getCachedData(cacheKey, state.currentTab);
+
+    if (cachedData) {
+        state.launches = cachedData.results || [];
+        state.totalResults = cachedData.count || 0;
+        state.nextUrl = cachedData.next;
+        state.previousUrl = cachedData.previous;
+
+        if (state.currentTab === 'upcoming' && state.currentPage === 1 && state.launches.length > 0) {
+            console.log('⏱️ [CACHE] Setting up countdown for:', state.launches[0].name);
+            setupCountdown(state.launches[0]);
+        }
+
         applyFilters();
+        showCacheIndicator(true, state.currentTab);
+        return;
+    }
+
+    content.innerHTML = `
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Fetching launch data from the cosmos...</p>
+        </div>
+    `;
+    pagination.style.display = 'none';
+
+    try {
+        const offset = (state.currentPage - 1) * RESULTS_PER_PAGE;
+        let url;
+
+        if (state.currentTab === 'upcoming') {
+            url = `${API_BASE}/launch/upcoming/?limit=${RESULTS_PER_PAGE}&offset=${offset}&mode=detailed&location__ids=12,27`;
+        } else {
+            url = `${API_BASE}/launch/previous/?limit=${RESULTS_PER_PAGE}&offset=${offset}&mode=detailed&location__ids=12,27`;
+        }
+
+        console.log('🌐 Fetching:', url);
+        const response = await fetch(url, {
+            headers: {
+                'Authorization': 'Token 4ac401f3abc3ea11ca947c1c2d69a2bba08a5e5d'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`API responded with status ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('✅ API returned', data.results?.length, 'launches');
+        console.log('🔍 First launch:', data.results?.[0]?.name, '| NET:', data.results?.[0]?.net);
+
+        setCachedData(cacheKey, data);
+
+        state.launches = data.results || [];
+        state.totalResults = data.count || 0;
+        state.nextUrl = data.next;
+        state.previousUrl = data.previous;
+
+        if (state.currentTab === 'upcoming' && state.currentPage === 1 && state.launches.length > 0) {
+            console.log('⏱️ [FRESH] Setting up countdown for:', state.launches[0].name);
+            setupCountdown(state.launches[0]);
+        }
+
+        applyFilters();
+        showCacheIndicator(false, state.currentTab);
+
+    } catch (error) {
+        console.error('❌ Error loading launches:', error);
+        content.innerHTML = `
+            <div class="error-message">
+                <h2>😞 Oops! Something went wrong</h2>
+                <p>Could not load launch data. This might be because:</p>
+                <ul style="text-align: left; max-width: 400px; margin: 15px auto; color: #aaaacc;">
+                    <li>The API rate limit has been reached</li>
+                    <li>Your internet connection has an issue</li>
+                    <li>The API might be temporarily down</li>
+                </ul>
+                <p style="margin-top: 15px;">
+                    <button onclick="loadLaunches()" style="background: #ff6b35; color: white; border: none; padding: 10px 25px; border-radius: 25px; cursor: pointer; font-size: 1em;">
+                        Try Again
+                    </button>
+                </p>
+            </div>
+        `;
     }
 }
 
-function setStatusFilter(status, evt) {
-    currentStatusFilter = status;
-    currentPage = 1;
+// =============================================
+// LOAD NEWS (with caching)
+// =============================================
+async function loadNews() {
+    const content = document.getElementById('mainContent');
+    const pagination = document.getElementById('pagination');
 
-    var filterBtns = document.querySelectorAll(".status-filters button");
-    for (var i = 0; i < filterBtns.length; i++) {
-        filterBtns[i].classList.remove("active");
-    }
-    if (evt && evt.target) {
-        evt.target.classList.add("active");
+    const cacheKey = getCacheKey('news', state.currentPage);
+    const cachedData = getCachedData(cacheKey, 'news');
+
+    if (cachedData) {
+        state.totalResults = cachedData.count || 0;
+        state.nextUrl = cachedData.next;
+        state.previousUrl = cachedData.previous;
+
+        renderNews(cachedData.results || []);
+        updatePagination();
+        showCacheIndicator(true, 'news');
+        return;
     }
 
-    applyFilters();
+    content.innerHTML = `
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Fetching space news...</p>
+        </div>
+    `;
+    pagination.style.display = 'none';
+
+    try {
+        const offset = (state.currentPage - 1) * RESULTS_PER_PAGE;
+        const url = `https://api.spaceflightnewsapi.net/v4/articles/?limit=${RESULTS_PER_PAGE}&offset=${offset}`;
+
+        console.log('🌐 Fetching:', url);
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('News API error');
+
+        const data = await response.json();
+        setCachedData(cacheKey, data);
+
+        state.totalResults = data.count || 0;
+        state.nextUrl = data.next;
+        state.previousUrl = data.previous;
+
+        renderNews(data.results || []);
+        updatePagination();
+        showCacheIndicator(false, 'news');
+
+    } catch (error) {
+        console.error('Error loading news:', error);
+        content.innerHTML = `
+            <div class="error-message">
+                <h2>📰 Could not load news</h2>
+                <p>Please try again later.</p>
+            </div>
+        `;
+    }
 }
 
+// =============================================
+// SEARCH & FILTER
+// =============================================
 function handleSearch() {
-    var input = document.getElementById("searchInput");
-    searchQuery = input ? input.value.trim().toLowerCase() : "";
-    currentPage = 1;
+    state.searchQuery = document.getElementById('searchInput').value.toLowerCase();
     applyFilters();
 }
 
-function changePage(dir) {
-    var totalPages = Math.ceil(filteredLaunches.length / perPage);
-    currentPage += dir;
-    if (currentPage < 1) currentPage = 1;
-    if (currentPage > totalPages) currentPage = totalPages;
-    renderLaunches();
-    window.scrollTo(0, 0);
+function setStatusFilter(filter) {
+    state.statusFilter = filter;
+
+    document.querySelectorAll('.status-filters button').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+
+    applyFilters();
 }
-
-function closeModal(evt) {
-    if (evt) evt.preventDefault();
-    var modal = document.getElementById("modalOverlay");
-    if (modal) {
-        modal.classList.remove("active");
-        document.body.style.overflow = "";
-    }
-}
-
-// ---- DATA LOADING ----
-
-function loadLaunchExtras() {
-    fetch("launch-extras.json")
-        .then(function (r) {
-            if (r.ok) return r.json();
-            return {};
-        })
-        .then(function (data) {
-            launchExtras = data || {};
-            console.log("Extras loaded");
-        })
-        .catch(function () {
-            launchExtras = {};
-        });
-}
-
-function fetchLaunches() {
-    showLoading();
-
-    var upcomingURL = LL2_API_BASE + "/launch/upcoming/?limit=" + LAUNCH_FETCH_LIMIT + "&location__ids=" + FLORIDA_LOCATION_IDS;
-    var previousURL = LL2_API_BASE + "/launch/previous/?limit=" + LAUNCH_FETCH_LIMIT + "&location__ids=" + FLORIDA_LOCATION_IDS;
-
-    console.log("Fetching:", upcomingURL);
-
-    Promise.all([
-        fetch(upcomingURL).then(function (r) { return r.json(); }),
-        fetch(previousURL).then(function (r) { return r.json(); })
-    ])
-        .then(function (results) {
-            var upcomingData = results[0];
-            var previousData = results[1];
-
-            console.log("Upcoming:", upcomingData.results ? upcomingData.results.length : 0);
-            console.log("Previous:", previousData.results ? previousData.results.length : 0);
-
-            var upcoming = [];
-            if (upcomingData.results) {
-                for (var i = 0; i < upcomingData.results.length; i++) {
-                    upcomingData.results[i]._tab = "upcoming";
-                    upcoming.push(upcomingData.results[i]);
-                }
-            }
-
-            var previous = [];
-            if (previousData.results) {
-                for (var j = 0; j < previousData.results.length; j++) {
-                    previousData.results[j]._tab = "previous";
-                    previous.push(previousData.results[j]);
-                }
-            }
-
-            allLaunches = upcoming.concat(previous);
-            console.log("Total launches:", allLaunches.length);
-
-            // Set next launch for countdown
-            if (upcoming.length > 0) {
-                upcoming.sort(function (a, b) { return new Date(a.net) - new Date(b.net); });
-                nextLaunch = upcoming[0];
-                startCountdown();
-            }
-
-            applyFilters();
-        })
-        .catch(function (err) {
-            console.error("Fetch error:", err);
-            showError("Unable to load launches. " + err.message);
-        });
-}
-
-// ---- FILTERING ----
 
 function applyFilters() {
-    filteredLaunches = [];
+    let launches = [...state.launches];
 
-    for (var i = 0; i < allLaunches.length; i++) {
-        var l = allLaunches[i];
-
-        // Tab filter
-        if (l._tab !== currentTab) continue;
-
-        // Status filter
-        if (currentStatusFilter !== "all") {
-            var sAbbrev = (l.status && l.status.abbrev) ? l.status.abbrev.toLowerCase() : "";
-            var sName = (l.status && l.status.name) ? l.status.name.toLowerCase() : "";
-            var filterVal = currentStatusFilter.toLowerCase();
-
-            if (filterVal === "go") {
-                if (sAbbrev !== "go") continue;
-            } else if (filterVal === "tbd") {
-                if (sAbbrev !== "tbd") continue;
-            } else if (filterVal === "tbc") {
-                if (sAbbrev !== "tbc") continue;
-            } else if (filterVal === "success") {
-                if (sAbbrev !== "success" && sName.indexOf("success") === -1) continue;
-            } else if (filterVal === "failure") {
-                if (sAbbrev !== "failure" && sName.indexOf("failure") === -1) continue;
-            }
-        }
-
-        // Search filter
-        if (searchQuery) {
-            var name = (l.name || "").toLowerCase();
-            var provider = (l.launch_service_provider && l.launch_service_provider.name) ? l.launch_service_provider.name.toLowerCase() : "";
-            var pad = (l.pad && l.pad.name) ? l.pad.name.toLowerCase() : "";
-            if (name.indexOf(searchQuery) === -1 && provider.indexOf(searchQuery) === -1 && pad.indexOf(searchQuery) === -1) continue;
-        }
-
-        filteredLaunches.push(l);
+    if (state.statusFilter !== 'all') {
+        launches = launches.filter(launch => {
+            const statusName = launch.status?.name || '';
+            return statusName.toLowerCase().includes(state.statusFilter.toLowerCase());
+        });
     }
 
-    // Sort
-    if (currentTab === "upcoming") {
-        filteredLaunches.sort(function (a, b) { return new Date(a.net) - new Date(b.net); });
-    } else {
-        filteredLaunches.sort(function (a, b) { return new Date(b.net) - new Date(a.net); });
+    if (state.searchQuery) {
+        launches = launches.filter(launch => {
+            const name = (launch.name || '').toLowerCase();
+            const provider = (launch.launch_service_provider?.name || '').toLowerCase();
+            const pad = (launch.pad?.name || '').toLowerCase();
+            const location = (launch.pad?.location?.name || '').toLowerCase();
+            const rocketName = (launch.rocket?.configuration?.name || '').toLowerCase();
+            const query = state.searchQuery;
+
+            return name.includes(query) ||
+                   provider.includes(query) ||
+                   pad.includes(query) ||
+                   location.includes(query) ||
+                   rocketName.includes(query);
+        });
     }
 
-    console.log("Filtered:", filteredLaunches.length, "tab:", currentTab, "status:", currentStatusFilter);
-    renderLaunches();
-}
-
-// ---- RENDERING ----
-
-function renderLaunches() {
-    var container = document.getElementById("mainContent");
-    if (!container) {
-        console.error("mainContent not found");
-        return;
-    }
-
-    if (filteredLaunches.length === 0) {
-        container.innerHTML = '<div class="no-results"><h3>No launches found</h3><p>Try adjusting your filters or search.</p></div>';
-        updatePagination();
-        return;
-    }
-
-    var totalPages = Math.ceil(filteredLaunches.length / perPage);
-    if (currentPage > totalPages) currentPage = totalPages;
-
-    var startIdx = (currentPage - 1) * perPage;
-    var endIdx = startIdx + perPage;
-    var pageLaunches = filteredLaunches.slice(startIdx, endIdx);
-
-    var html = '<div class="launch-grid">';
-
-    for (var i = 0; i < pageLaunches.length; i++) {
-        try {
-            html += buildCard(pageLaunches[i]);
-        } catch (e) {
-            console.error("Card build error:", e);
-        }
-    }
-
-    html += '</div>';
-    container.innerHTML = html;
-
-    // Attach click handlers
-    var cards = container.querySelectorAll(".launch-card");
-    for (var j = 0; j < cards.length; j++) {
-        (function (card) {
-            card.addEventListener("click", function () {
-                var id = card.getAttribute("data-id");
-                openModal(id);
-            });
-        })(cards[j]);
-    }
-
-    console.log("Rendered", cards.length, "cards, page", currentPage, "of", totalPages);
+    state.filteredLaunches = launches;
+    renderLaunches(launches);
     updatePagination();
 }
 
-function updatePagination() {
-    var pagination = document.getElementById("pagination");
-    var prevBtn = document.getElementById("prevBtn");
-    var nextBtn = document.getElementById("nextBtn");
-    var pageInfo = document.getElementById("pageInfo");
+// =============================================
+// RENDER LAUNCHES
+// =============================================
+function renderLaunches(launches) {
+    const content = document.getElementById('mainContent');
 
-    if (!pagination) return;
-
-    var totalPages = Math.ceil(filteredLaunches.length / perPage);
-
-    if (totalPages <= 1) {
-        pagination.style.display = "none";
+    if (launches.length === 0) {
+        content.innerHTML = `
+            <div class="error-message">
+                <h2>🔍 No launches found</h2>
+                <p>Try changing your search or filter.</p>
+            </div>
+        `;
         return;
     }
 
-    pagination.style.display = "";
-    if (pageInfo) pageInfo.textContent = "Page " + currentPage + " of " + totalPages;
-    if (prevBtn) prevBtn.disabled = (currentPage <= 1);
-    if (nextBtn) nextBtn.disabled = (currentPage >= totalPages);
+    let html = '<div class="launches-grid">';
+
+    launches.forEach((launch, index) => {
+        const imageUrl = launch.image || 'https://via.placeholder.com/400x200/0a0a2e/666699?text=No+Image';
+        const date = launch.net ? new Date(launch.net).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZoneName: 'short'
+        }) : 'TBD';
+
+        const statusName = launch.status?.name || 'Unknown';
+        const statusClass = getStatusClass(statusName);
+        const provider = launch.launch_service_provider?.name || 'Unknown Provider';
+        const location = launch.pad?.location?.name || 'Unknown Location';
+        const rocketName = launch.rocket?.configuration?.name || 'Unknown Rocket';
+
+        const trajectoryInfo = getTrajectoryInfo(launch);
+        const trajectoryBadgeHtml = renderTrajectoryBadge(trajectoryInfo);
+        const chrisSaysHtml = renderChrisSaysCard(trajectoryInfo);
+
+        html += `
+            <div class="launch-card" onclick="openModal(${index})">
+                <img class="launch-card-image" src="${imageUrl}" alt="${launch.name}" 
+                     onerror="this.src='https://via.placeholder.com/400x200/0a0a2e/666699?text=No+Image'">
+                <div class="launch-card-body">
+                    <h3>${launch.name || 'Unnamed Launch'}</h3>
+                    <div class="launch-meta">
+                        <div class="meta-row">
+                            <span class="icon">🚀</span>
+                            <span>${rocketName}</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="icon">🏢</span>
+                            <span>${provider}</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="icon">📍</span>
+                            <span>${location}</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="icon">📅</span>
+                            <span>${date}</span>
+                        </div>
+                    </div>
+                    <span class="status-badge ${statusClass}">${statusName}</span>
+                    ${trajectoryBadgeHtml}
+                    ${chrisSaysHtml}
+                </div>
+            </div>
+        `;
+    });
+
+    html += '</div>';
+    content.innerHTML = html;
 }
 
-function buildCard(launch) {
-    var name = launch.name || "Unknown";
-    var parts = name.split("|");
-    var mission = parts[0].trim();
-    var payload = parts.length > 1 ? parts[1].trim() : "";
-    var provider = (launch.launch_service_provider && launch.launch_service_provider.name) || "Unknown";
-    var padName = (launch.pad && launch.pad.name) || "Unknown Pad";
-    var statusName = (launch.status && launch.status.name) || "Unknown";
-    var statusAbbrev = (launch.status && launch.status.abbrev) || "UNK";
-    var img = launch.image || "";
-    var netDate = launch.net ? new Date(launch.net) : null;
-    var dateStr = netDate ? formatDate(netDate) : "TBD";
-    var flags = getAutoFlags(launch);
-    var trajectory = getTrajectory(launch);
+// =============================================
+// RENDER NEWS
+// =============================================
+function renderNews(articles) {
+    const content = document.getElementById('mainContent');
 
-    var h = '<div class="launch-card" data-id="' + escapeAttr(String(launch.id)) + '">';
-
-    if (img) {
-        h += '<div class="card-image" style="background-image:url(\'' + escapeAttr(img) + '\')"></div>';
-    } else {
-        h += '<div class="card-image card-image-placeholder">🚀</div>';
+    if (articles.length === 0) {
+        content.innerHTML = `
+            <div class="error-message">
+                <h2>📰 No news found</h2>
+            </div>
+        `;
+        return;
     }
 
-    h += '<div class="card-body">';
+    let html = '<div class="news-grid">';
 
-    // Status + flags row
-    h += '<div class="card-status-row">';
-    h += '<span class="status-badge status-' + escapeAttr(statusAbbrev.toLowerCase()) + '">' + escapeHTML(statusName) + '</span>';
-    for (var f = 0; f < flags.length; f++) {
-        h += ' <span class="flag-badge">' + escapeHTML(flags[f]) + '</span>';
+    articles.forEach(article => {
+        const imageUrl = article.image_url || 'https://via.placeholder.com/400x200/0a0a2e/666699?text=Space+News';
+        const date = article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        }) : '';
+
+        const summary = article.summary
+            ? (article.summary.length > 150 ? article.summary.substring(0, 150) + '...' : article.summary)
+            : '';
+
+        html += `
+            <div class="news-card">
+                <img src="${imageUrl}" alt="${article.title}" 
+                     onerror="this.src='https://via.placeholder.com/400x200/0a0a2e/666699?text=Space+News'">
+                <div class="news-card-body">
+                    <h3><a href="${article.url}" target="_blank">${article.title}</a></h3>
+                    <p>${summary}</p>
+                    <div class="news-date">📰 ${article.news_site || ''} · ${date}</div>
+                </div>
+            </div>
+        `;
+    });
+
+    html += '</div>';
+    content.innerHTML = html;
+}
+
+// =============================================
+// COUNTDOWN TIMER
+// =============================================
+function setupCountdown(launch) {
+    console.log('⏱️ setupCountdown() called');
+    console.log('⏱️ Launch name:', launch?.name);
+    console.log('⏱️ Launch NET:', launch?.net);
+
+    if (state.countdownInterval) {
+        clearInterval(state.countdownInterval);
+        state.countdownInterval = null;
+        console.log('⏱️ Cleared previous interval');
     }
-    h += '</div>';
 
-    h += '<h3 class="card-title">' + escapeHTML(mission) + '</h3>';
-    if (payload) {
-        h += '<p class="card-payload">' + escapeHTML(payload) + '</p>';
+    const nameEl = document.getElementById('countdownName');
+    const daysEl = document.getElementById('cd-days');
+    const hoursEl = document.getElementById('cd-hours');
+    const minsEl = document.getElementById('cd-mins');
+    const secsEl = document.getElementById('cd-secs');
+
+    console.log('⏱️ DOM check — countdownName:', !!nameEl);
+    console.log('⏱️ DOM check — cd-days:', !!daysEl);
+    console.log('⏱️ DOM check — cd-hours:', !!hoursEl);
+    console.log('⏱️ DOM check — cd-mins:', !!minsEl);
+    console.log('⏱️ DOM check — cd-secs:', !!secsEl);
+
+    if (!nameEl || !daysEl || !hoursEl || !minsEl || !secsEl) {
+        console.error('❌ COUNTDOWN DOM ELEMENTS MISSING — cannot start timer');
+        return;
     }
 
-    h += '<div class="card-meta">';
-    h += '<span>🏢 ' + escapeHTML(provider) + '</span>';
-    h += '<span>📍 ' + escapeHTML(padName) + '</span>';
-    h += '<span>📅 ' + escapeHTML(dateStr) + '</span>';
-    h += '</div>';
+    nameEl.textContent = launch.name || 'Unknown Mission';
+    console.log('⏱️ Set countdown name to:', nameEl.textContent);
 
-    if (trajectory) {
-        h += '<div class="card-trajectory">🧭 ' + escapeHTML(trajectory) + '</div>';
+    const section = document.getElementById('countdownSection');
+    if (section) {
+        section.style.display = 'block';
+        console.log('⏱️ Countdown section visibility: block');
     }
 
-    if (netDate && currentTab === "upcoming") {
-        var cd = getCountdownText(netDate);
-        if (cd) {
-            h += '<div class="card-countdown">⏱️ ' + escapeHTML(cd) + '</div>';
+    if (!launch.net) {
+        console.warn('⏱️ No NET date — showing TBD');
+        daysEl.textContent = '--';
+        hoursEl.textContent = '--';
+        minsEl.textContent = '--';
+        secsEl.textContent = '--';
+        return;
+    }
+
+    state.nextLaunchDate = new Date(launch.net);
+    console.log('⏱️ Parsed launch date:', state.nextLaunchDate);
+    console.log('⏱️ Launch date valid:', !isNaN(state.nextLaunchDate.getTime()));
+
+    if (isNaN(state.nextLaunchDate.getTime())) {
+        console.error('❌ Invalid date from NET:', launch.net);
+        daysEl.textContent = '--';
+        hoursEl.textContent = '--';
+        minsEl.textContent = '--';
+        secsEl.textContent = '--';
+        return;
+    }
+
+    updateCountdown();
+    state.countdownInterval = setInterval(updateCountdown, 1000);
+    console.log('⏱️ Countdown interval started ✅');
+}
+
+function updateCountdown() {
+    const now = new Date();
+    const diff = state.nextLaunchDate - now;
+
+    const daysEl = document.getElementById('cd-days');
+    const hoursEl = document.getElementById('cd-hours');
+    const minsEl = document.getElementById('cd-mins');
+    const secsEl = document.getElementById('cd-secs');
+
+    if (!daysEl || !hoursEl || !minsEl || !secsEl) {
+        console.error('❌ Countdown elements disappeared from DOM');
+        if (state.countdownInterval) {
+            clearInterval(state.countdownInterval);
+            state.countdownInterval = null;
         }
+        return;
     }
-
-    h += '</div></div>';
-    return h;
-}
-
-// ---- COUNTDOWN ----
-
-function startCountdown() {
-    if (countdownInterval) clearInterval(countdownInterval);
-
-    updateCountdownDisplay();
-    countdownInterval = setInterval(updateCountdownDisplay, 1000);
-}
-
-function updateCountdownDisplay() {
-    if (!nextLaunch || !nextLaunch.net) return;
-
-    var nameEl = document.getElementById("countdownName");
-    var daysEl = document.getElementById("cd-days");
-    var hoursEl = document.getElementById("cd-hours");
-    var minsEl = document.getElementById("cd-mins");
-    var secsEl = document.getElementById("cd-secs");
-
-    if (nameEl) {
-        var lName = (nextLaunch.name || "").split("|")[0].trim();
-        nameEl.textContent = "Next Launch: " + lName;
-    }
-
-    var diff = new Date(nextLaunch.net) - new Date();
 
     if (diff <= 0) {
-        if (daysEl) daysEl.textContent = "00";
-        if (hoursEl) hoursEl.textContent = "00";
-        if (minsEl) minsEl.textContent = "00";
-        if (secsEl) secsEl.textContent = "00";
-        return;
-    }
-
-    var days = Math.floor(diff / 86400000);
-    var hours = Math.floor((diff % 86400000) / 3600000);
-    var mins = Math.floor((diff % 3600000) / 60000);
-    var secs = Math.floor((diff % 60000) / 1000);
-
-    if (daysEl) daysEl.textContent = padZero(days);
-    if (hoursEl) hoursEl.textContent = padZero(hours);
-    if (minsEl) minsEl.textContent = padZero(mins);
-    if (secsEl) secsEl.textContent = padZero(secs);
-}
-
-function padZero(n) {
-    return n < 10 ? "0" + n : String(n);
-}
-
-// ---- MODAL ----
-
-function openModal(launchId) {
-    console.log("Opening modal:", launchId);
-
-    var modal = document.getElementById("modalOverlay");
-    var modalImg = document.getElementById("modalImage");
-    var modalTitle = document.getElementById("modalTitle");
-    var modalBody = document.getElementById("modalBody");
-
-    if (!modal || !modalBody) {
-        console.error("Modal elements not found");
-        return;
-    }
-
-    var launch = null;
-    for (var i = 0; i < allLaunches.length; i++) {
-        if (String(allLaunches[i].id) === String(launchId)) {
-            launch = allLaunches[i];
-            break;
+        daysEl.textContent = '0';
+        hoursEl.textContent = '00';
+        minsEl.textContent = '00';
+        secsEl.textContent = '00';
+        if (state.countdownInterval) {
+            clearInterval(state.countdownInterval);
+            state.countdownInterval = null;
+            console.log('⏱️ Countdown reached zero — stopped');
         }
-    }
-
-    if (!launch) {
-        console.error("Launch not found:", launchId);
         return;
     }
 
-    var name = launch.name || "Unknown";
-    var parts = name.split("|");
-    var mission = parts[0].trim();
-    var payload = parts.length > 1 ? parts[1].trim() : "";
-    var provider = (launch.launch_service_provider && launch.launch_service_provider.name) || "Unknown";
-    var rocket = (launch.rocket && launch.rocket.configuration && launch.rocket.configuration.full_name) || "Unknown";
-    var padName = (launch.pad && launch.pad.name) || "Unknown";
-    var statusName = (launch.status && launch.status.name) || "Unknown";
-    var statusAbbrev = (launch.status && launch.status.abbrev) || "UNK";
-    var img = launch.image || "";
-    var netDate = launch.net ? new Date(launch.net) : null;
-    var dateStr = netDate ? formatDate(netDate) : "TBD";
-    var desc = (launch.mission && launch.mission.description) || "";
-    var trajectory = getTrajectory(launch);
-    var flags = getAutoFlags(launch);
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const secs = Math.floor((diff % (1000 * 60)) / 1000);
 
-    // Set modal image
-    if (modalImg) {
-        if (img) {
-            modalImg.src = img;
-            modalImg.style.display = "";
+    daysEl.textContent = days;
+    hoursEl.textContent = hours.toString().padStart(2, '0');
+    minsEl.textContent = mins.toString().padStart(2, '0');
+    secsEl.textContent = secs.toString().padStart(2, '0');
+}
+
+// =============================================
+// LAUNCH DETAIL MODAL
+// =============================================
+function openModal(index) {
+    const launch = state.filteredLaunches[index];
+    if (!launch) return;
+
+    console.log('🔍 Modal opened for:', launch.name);
+    console.log('🔍 Launch ID:', launch.id);
+    console.log('🔍 Launch slug:', launch.slug);
+
+    const modal = document.getElementById('modalOverlay');
+    const imageUrl = launch.image || 'https://via.placeholder.com/700x300/0a0a2e/666699?text=No+Image';
+
+    document.getElementById('modalTitle').textContent = launch.name || 'Launch Details';
+    document.getElementById('modalImage').src = imageUrl;
+
+    const date = launch.net ? new Date(launch.net).toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZoneName: 'short'
+    }) : 'TBD';
+
+    const provider = launch.launch_service_provider?.name || 'Unknown';
+    const providerType = launch.launch_service_provider?.type || '';
+    const rocketName = launch.rocket?.configuration?.name || 'Unknown';
+    const rocketFamily = launch.rocket?.configuration?.family || '';
+    const padName = launch.pad?.name || 'Unknown';
+    const location = launch.pad?.location?.name || 'Unknown';
+    const statusName = launch.status?.name || 'Unknown';
+    const statusDesc = launch.status?.description || '';
+    const missionName = launch.mission?.name || 'N/A';
+    const missionDesc = launch.mission?.description || 'No mission description available.';
+    const missionType = launch.mission?.type || 'N/A';
+    const orbit = launch.mission?.orbit?.name || 'N/A';
+
+    const trajectoryInfo = getTrajectoryInfo(launch);
+    const chrisSaysModalHtml = renderChrisSaysModal(trajectoryInfo);
+
+    // ---- BUILD WATCH LIVE SECTION ----
+    let webcastHtml = '';
+
+    // Check for manual video URL from launch-extras.json
+    if (trajectoryInfo.videoUrl) {
+        webcastHtml = `
+            <div style="margin-top: 20px;">
+                <strong>📺 Watch Live:</strong><br>
+                <a href="${trajectoryInfo.videoUrl}" target="_blank" 
+                   style="color: #ff6b35; font-weight: bold; font-size: 1.1em;">
+                   🔴 Live Stream
+                </a>
+            </div>
+        `;
+    }
+
+    // Also include any API-provided video URLs
+    if (launch.vidURLs && launch.vidURLs.length > 0) {
+        if (!webcastHtml) {
+            webcastHtml = '<div style="margin-top: 20px;"><strong>📺 Watch Live:</strong><br>';
         } else {
-            modalImg.style.display = "none";
+            webcastHtml += '<div style="margin-top: 10px;">';
         }
-    }
-
-    // Set title
-    if (modalTitle) {
-        modalTitle.textContent = mission;
-    }
-
-    // Build body
-    var h = '';
-
-    // Status row
-    h += '<div class="modal-status-row">';
-    h += '<span class="status-badge status-' + escapeAttr(statusAbbrev.toLowerCase()) + '">' + escapeHTML(statusName) + '</span>';
-    for (var f = 0; f < flags.length; f++) {
-        h += ' <span class="flag-badge">' + escapeHTML(flags[f]) + '</span>';
-    }
-    h += '</div>';
-
-    if (payload) {
-        h += '<p class="modal-payload">' + escapeHTML(payload) + '</p>';
-    }
-
-    // Details
-    h += '<div class="modal-details">';
-    h += '<div class="detail-row"><span class="detail-label">🏢 Provider</span><span>' + escapeHTML(provider) + '</span></div>';
-    h += '<div class="detail-row"><span class="detail-label">🚀 Vehicle</span><span>' + escapeHTML(rocket) + '</span></div>';
-    h += '<div class="detail-row"><span class="detail-label">📍 Pad</span><span>' + escapeHTML(padName) + '</span></div>';
-    h += '<div class="detail-row"><span class="detail-label">📅 Date</span><span>' + escapeHTML(dateStr) + '</span></div>';
-    h += '</div>';
-
-    if (desc) {
-        h += '<div class="modal-section"><h3>📋 Mission Overview</h3><p>' + escapeHTML(desc) + '</p></div>';
-    }
-
-    if (trajectory) {
-        h += '<div class="modal-section"><h3>🧭 Trajectory</h3><p>' + escapeHTML(trajectory) + '</p></div>';
-    }
-
-    // Countdown
-    if (netDate && launch._tab === "upcoming") {
-        var cd = getCountdownText(netDate);
-        if (cd) {
-            h += '<div class="modal-section"><h3>⏱️ Countdown</h3><p class="countdown-display">' + escapeHTML(cd) + '</p></div>';
-        }
-    }
-
-    // Viewing tips
-    var tips = getViewingTips(launch);
-    if (tips.length > 0) {
-        h += '<div class="modal-section"><h3>👀 Viewing Tips</h3><ul class="tips-list">';
-        for (var t = 0; t < tips.length; t++) {
-            h += '<li>' + escapeHTML(tips[t]) + '</li>';
-        }
-        h += '</ul></div>';
-    }
-
-    // Viewing spots
-    var spots = getViewingSpots();
-    h += '<div class="modal-section"><h3>📍 Best Viewing Spots</h3><ul class="spots-list">';
-    for (var s = 0; s < spots.length; s++) {
-        h += '<li>' + spots[s].icon + ' <strong>' + escapeHTML(spots[s].name) + '</strong> (' + spots[s].dist + ') – ' + escapeHTML(spots[s].note) + '</li>';
-    }
-    h += '</ul></div>';
-
-    // Video links
-    var vidURLs = getVideoURLs(launch);
-    if (vidURLs.length > 0) {
-        h += '<div class="modal-section"><h3>📡 Live Feeds</h3><ul class="live-feeds-list">';
-        for (var u = 0; u < vidURLs.length; u++) {
-            var url = vidURLs[u];
-            var label = "Live Stream";
-            var icon = "📺";
-            if (url.indexOf("youtube") !== -1 || url.indexOf("youtu.be") !== -1) { label = "YouTube"; icon = "▶️"; }
-            else if (url.indexOf("nasa") !== -1) { label = "NASA TV"; icon = "🛰️"; }
-            else if (url.indexOf("spacex") !== -1) { label = "SpaceX"; icon = "🚀"; }
-            h += '<li>' + icon + ' <a href="' + escapeAttr(url) + '" target="_blank" rel="noopener">' + escapeHTML(label) + '</a></li>';
-        }
-        h += '</ul></div>';
-    }
-
-    h += '<div id="modalNewsSection"></div>';
-
-    modalBody.innerHTML = h;
-    modal.classList.add("active");
-    document.body.style.overflow = "hidden";
-
-    // Fetch related news
-    fetchLaunchNews(launch);
-}
-
-function getVideoURLs(launch) {
-    var urls = [];
-    var sources = [launch.vid_urls, launch.vidURLs];
-    for (var s = 0; s < sources.length; s++) {
-        if (sources[s]) {
-            for (var v = 0; v < sources[s].length; v++) {
-                var item = sources[s][v];
-                if (typeof item === "string") {
-                    urls.push(item);
-                } else if (item && item.url) {
-                    urls.push(item.url);
-                }
-            }
-        }
-    }
-    return urls;
-}
-
-// ---- NEWS TAB ----
-
-function fetchNews() {
-    var container = document.getElementById("mainContent");
-    if (!container) return;
-
-    container.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading space news...</p></div>';
-
-    fetch(SNAPI_BASE + "/articles/?limit=20")
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-            if (!data.results || data.results.length === 0) {
-                container.innerHTML = '<div class="no-results"><h3>No news found</h3></div>';
-                return;
-            }
-
-            var h = '<div class="news-grid">';
-            for (var i = 0; i < data.results.length; i++) {
-                var article = data.results[i];
-                h += '<a href="' + escapeAttr(article.url) + '" target="_blank" rel="noopener" class="news-card">';
-                if (article.image_url) {
-                    h += '<div class="card-image" style="background-image:url(\'' + escapeAttr(article.image_url) + '\')"></div>';
-                }
-                h += '<div class="card-body">';
-                h += '<h3>' + escapeHTML(article.title) + '</h3>';
-                h += '<p>' + escapeHTML((article.summary || "").substring(0, 150)) + '</p>';
-                h += '<span class="news-source">' + escapeHTML(article.news_site || "") + '</span>';
-                h += '</div></a>';
-            }
-            h += '</div>';
-            container.innerHTML = h;
-        })
-        .catch(function (e) {
-            console.error("News error:", e);
-            container.innerHTML = '<div class="error-message"><p>Unable to load news.</p></div>';
+        launch.vidURLs.forEach(vid => {
+            webcastHtml += `<a href="${vid.url}" target="_blank" style="color: #ff6b35; margin-right: 10px;">${vid.title || 'Webcast'}</a> `;
         });
-}
-
-function fetchLaunchNews(launch) {
-    var q = (launch.name || "").split("|")[0].trim();
-    fetch(SNAPI_BASE + "/articles/?limit=5&search=" + encodeURIComponent(q))
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-            var section = document.getElementById("modalNewsSection");
-            if (section && data.results && data.results.length > 0) {
-                var nh = '<div class="modal-section"><h3>📰 Related News</h3><ul class="news-list">';
-                for (var n = 0; n < data.results.length; n++) {
-                    nh += '<li><a href="' + escapeAttr(data.results[n].url) + '" target="_blank" rel="noopener">' + escapeHTML(data.results[n].title) + '</a></li>';
-                }
-                nh += '</ul></div>';
-                section.innerHTML = nh;
-            }
-        })
-        .catch(function () {});
-}
-
-// ---- AUTO FLAGS ----
-
-function getAutoFlags(launch) {
-    var flags = [];
-    var name = (launch.name || "").toLowerCase();
-    var prov = (launch.launch_service_provider && launch.launch_service_provider.name) ? launch.launch_service_provider.name.toLowerCase() : "";
-
-    if (name.indexOf("crew") !== -1) flags.push("👨‍🚀 Crew");
-    if (name.indexOf("falcon heavy") !== -1) flags.push("🔥 Falcon Heavy");
-    if (name.indexOf("starship") !== -1) flags.push("⭐ Starship");
-    if (name.indexOf("starlink") !== -1) flags.push("🛰️ Starlink");
-
-    var extras = launchExtras[launch.id];
-    if (extras && extras.flags) {
-        for (var i = 0; i < extras.flags.length; i++) {
-            flags.push(extras.flags[i]);
-        }
+        webcastHtml += '</div>';
     }
 
-    return flags;
+    document.getElementById('modalBody').innerHTML = `
+        <h3>${missionName}</h3>
+        <p>${missionDesc}</p>
+
+        <div class="detail-grid">
+            <div class="detail-item">
+                <div class="detail-label">📅 Date</div>
+                <div class="detail-value">${date}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">📊 Status</div>
+                <div class="detail-value">${statusName}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">🚀 Rocket</div>
+                <div class="detail-value">${rocketName}${rocketFamily ? ' (' + rocketFamily + ')' : ''}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">🏢 Provider</div>
+                <div class="detail-value">${provider}${providerType ? ' (' + providerType + ')' : ''}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">📍 Launch Pad</div>
+                <div class="detail-value">${padName}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">🌍 Location</div>
+                <div class="detail-value">${location}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">🎯 Mission Type</div>
+                <div class="detail-value">${missionType}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">🌌 Orbit</div>
+                <div class="detail-value">${orbit}</div>
+            </div>
+        </div>
+
+        ${statusDesc ? `<p style="margin-top: 15px; font-size: 0.85em;"><em>${statusDesc}</em></p>` : ''}
+        ${webcastHtml}
+        ${chrisSaysModalHtml}
+    `;
+
+    modal.classList.add('open');
 }
 
-// ---- TRAJECTORY ----
-
-function getTrajectory(launch) {
-    var name = (launch.name || "").toLowerCase();
-    var orbit = "";
-    if (launch.mission && launch.mission.orbit && launch.mission.orbit.abbrev) {
-        orbit = launch.mission.orbit.abbrev.toUpperCase();
-    }
-
-    var extras = launchExtras[launch.id];
-    if (extras && extras.trajectory) return extras.trajectory;
-
-    if (orbit === "GTO" || orbit === "GEO") return "East over the Atlantic \u2013 geostationary transfer arc";
-    if (orbit === "SSO") return "South-Southeast along the coast \u2013 sun-synchronous";
-    if (orbit === "ISS" || name.indexOf("iss") !== -1 || name.indexOf("station") !== -1) return "Northeast \u2013 ISS rendezvous trajectory";
-    if (name.indexOf("starlink") !== -1) return "East-Northeast \u2013 Starlink deployment";
-    if (orbit === "LEO") return "East over the Atlantic \u2013 low Earth orbit";
-    if (name.indexOf("lunar") !== -1 || name.indexOf("moon") !== -1 || name.indexOf("artemis") !== -1) return "East \u2013 translunar injection";
-
-    return "";
-}
-
-// ---- VIEWING TIPS ----
-
-function getViewingTips(launch) {
-    var tips = [];
-    var netDate = launch.net ? new Date(launch.net) : null;
-    if (netDate) {
-        tips.push("Sunset at Cape Canaveral: ~" + getSunsetTime(netDate) + " ET");
-    }
-    var name = (launch.name || "").toLowerCase();
-    if (name.indexOf("falcon heavy") !== -1) tips.push("Triple booster separation and dual landing burns!");
-    if (name.indexOf("starlink") !== -1) tips.push("Watch for satellite train 15-30 min after launch");
-    if (name.indexOf("crew") !== -1) tips.push("Crew mission \u2013 expect larger crowds, arrive early");
-    if (name.indexOf("starship") !== -1) tips.push("Most powerful rocket ever \u2013 intense sound and vibration!");
-    return tips;
-}
-
-function getSunsetTime(date) {
-    var lat = 28.3922;
-    var lng = -80.6077;
-    var start = new Date(date.getFullYear(), 0, 0);
-    var dayOfYear = Math.floor((date - start) / 86400000);
-    var declination = -23.45 * Math.cos((360 / 365) * (dayOfYear + 10) * Math.PI / 180);
-    var latRad = lat * Math.PI / 180;
-    var decRad = declination * Math.PI / 180;
-    var hourAngle = Math.acos(-Math.tan(latRad) * Math.tan(decRad)) * 180 / Math.PI;
-    var b = (360 / 365) * (dayOfYear - 81) * Math.PI / 180;
-    var eot = 9.87 * Math.sin(2 * b) - 7.53 * Math.cos(b) - 1.5 * Math.sin(b);
-    var solarNoon = 12 - (lng / 15) - (eot / 60);
-    var sunsetUTC = solarNoon + (hourAngle / 15);
-    var year = date.getFullYear();
-    var mar = new Date(year, 2, 8 + (7 - new Date(year, 2, 8).getDay()) % 7);
-    var nov = new Date(year, 10, 1 + (7 - new Date(year, 10, 1).getDay()) % 7);
-    var dst = (date >= mar && date < nov) ? 1 : 0;
-    var sunsetLocal = sunsetUTC - 5 + dst;
-    var hrs = Math.floor(sunsetLocal);
-    var mins = Math.round((sunsetLocal - hrs) * 60);
-    return hrs + ":" + (mins < 10 ? "0" : "") + mins;
-}
-
-function getViewingSpots() {
-    return [
-        { name: "Jetty Park Beach", icon: "🏖️", dist: "~6 mi", note: "Great for families, parking available" },
-        { name: "Playalinda Beach", icon: "🏝️", dist: "~3 mi", note: "Closest public beach \u2013 arrive very early" },
-        { name: "Space View Park", icon: "🌳", dist: "~12 mi", note: "Free, iconic spot in Titusville" },
-        { name: "Max Brewer Bridge", icon: "🌉", dist: "~12 mi", note: "Elevated view, can get crowded" },
-        { name: "KSC Visitor Complex", icon: "🚀", dist: "Varies", note: "Official viewing \u2013 tickets required" }
-    ];
-}
-
-// ---- HELPERS ----
-
-function getCountdownText(target) {
-    var diff = target - new Date();
-    if (diff <= 0) return "";
-    var days = Math.floor(diff / 86400000);
-    var hrs = Math.floor((diff % 86400000) / 3600000);
-    var mins = Math.floor((diff % 3600000) / 60000);
-    if (days > 0) return "T-" + days + "d " + hrs + "h " + mins + "m";
-    if (hrs > 0) return "T-" + hrs + "h " + mins + "m";
-    return "T-" + mins + "m";
-}
-
-function formatDate(d) {
-    try {
-        return d.toLocaleDateString("en-US", {
-            weekday: "short", year: "numeric", month: "short", day: "numeric",
-            hour: "2-digit", minute: "2-digit", timeZoneName: "short"
-        });
-    } catch (e) {
-        return d.toString();
+function closeModal(event) {
+    if (event.target === document.getElementById('modalOverlay')) {
+        document.getElementById('modalOverlay').classList.remove('open');
     }
 }
 
-function escapeHTML(str) {
-    if (!str) return "";
-    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
+// =============================================
+// PAGINATION
+// =============================================
+function updatePagination() {
+    const pagination = document.getElementById('pagination');
+    const totalPages = Math.ceil(state.totalResults / RESULTS_PER_PAGE);
 
-function escapeAttr(str) {
-    if (!str) return "";
-    return String(str).replace(/&/g, "&amp;").replace(/'/g, "&#39;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function showLoading() {
-    var el = document.getElementById("mainContent");
-    if (el) {
-        el.innerHTML = '<div class="loading"><div class="spinner"></div><p>Fetching launch data from the cosmos...</p></div>';
+    if (totalPages <= 1) {
+        pagination.style.display = 'none';
+        return;
     }
+
+    pagination.style.display = 'flex';
+    document.getElementById('pageInfo').textContent = `Page ${state.currentPage} of ${totalPages}`;
+    document.getElementById('prevBtn').disabled = state.currentPage <= 1;
+    document.getElementById('nextBtn').disabled = state.currentPage >= totalPages;
 }
 
-function showError(msg) {
-    var el = document.getElementById("mainContent");
-    if (el) {
-        el.innerHTML = '<div class="error-message"><p>' + escapeHTML(msg) + '</p></div>';
+function changePage(direction) {
+    state.currentPage += direction;
+    if (state.currentTab === 'news') {
+        loadNews();
+    } else {
+        loadLaunches();
     }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// ---- KEYBOARD ----
+// =============================================
+// HELPER: Get CSS class for status badge
+// =============================================
+function getStatusClass(status) {
+    const s = status.toLowerCase();
+    if (s.includes('go for launch') || s.includes('go')) return 'status-go';
+    if (s.includes('tbd')) return 'status-tbd';
+    if (s.includes('tbc')) return 'status-tbc';
+    if (s.includes('success')) return 'status-success';
+    if (s.includes('fail') || s.includes('partial')) return 'status-failure';
+    return 'status-default';
+}
 
-document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape") {
-        closeModal(e);
-    }
+// =============================================
+// INITIALIZE
+// =============================================
+document.addEventListener('DOMContentLoaded', async function() {
+    console.log('🚀 Chris The Rocket Guy is launching...');
+    console.log('💾 Cache system active — durations:', CACHE_DURATIONS);
+
+    await loadLaunchExtras();
+    loadLaunches();
 });
