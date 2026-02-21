@@ -847,3 +847,26 @@ footer a {
 .balcony-list li strong {
     color: #ff6b35;
 }
+.modal-close {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    background: none;
+    border: none;
+    color: #ffffff;
+    font-size: 2em;
+    cursor: pointer;
+    z-index: 1001;
+    line-height: 1;
+    padding: 4px 10px;
+    border-radius: 50%;
+    transition: background 0.2s ease;
+}
+
+.modal-close:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.modal-content {
+    position: relative;  /* needed for absolute positioning of close button */
+}
