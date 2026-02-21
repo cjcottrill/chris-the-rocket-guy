@@ -214,7 +214,8 @@ function switchTab(tab) {
 }
 
 function renderLaunches() {
-    var container = document.getElementById("launch-list");
+    var container = document.getElementById("mainContent")
+;
     if (!container) {
         console.error("launch-list element not found!");
         return;
@@ -592,14 +593,16 @@ function escapeAttr(str) {
 }
 
 function showLoading() {
-    var el = document.getElementById("launch-list");
+    var el = document.getElementById("mainContent")
+;
     if (el) {
         el.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Loading launches from the Space Coast...</p></div>';
     }
 }
 
 function showError(msg) {
-    var el = document.getElementById("launch-list");
+    var el = document.getElementById("mainContent")
+;
     if (el) {
         el.innerHTML = '<div class="error-message"><p>⚠️ ' + escapeHTML(msg) + '</p></div>';
     }
