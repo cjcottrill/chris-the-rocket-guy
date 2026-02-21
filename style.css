@@ -885,22 +885,6 @@ footer a {
     border-radius: 6px;
     transition: background 0.2s ease;
 }
-/* Live Feeds List */
-.live-feeds-list {
-    list-style: none;
-    padding: 0;
-    margin: 0.5rem 0;
-}
-
-.live-feeds-list li {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.65rem 0.75rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 6px;
-    transition: background 0.2s ease;
-}
 
 .live-feeds-list li:last-child {
     border-bottom: none;
