@@ -478,7 +478,7 @@ async function loadLaunches() {
     content.innerHTML = `
         <div class="loading">
             <div class="spinner"></div>
-            <p>Fetching launch data from the cosmos...</p>
+            <p>Syncing with launch providers...</p>
         </div>
     `;
     pagination.style.display = 'none';
