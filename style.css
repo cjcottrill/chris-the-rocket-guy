@@ -870,6 +870,7 @@ footer a {
 .modal-content {
     position: relative;  /* needed for absolute positioning of close button */
 }
+/* Live Feeds List */
 .live-feeds-list {
     list-style: none;
     padding: 0;
