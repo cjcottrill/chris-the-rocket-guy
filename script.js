@@ -194,6 +194,10 @@ function applyFilters() {
     } else {
         filteredLaunches.sort(function (a, b) { return new Date(b.net) - new Date(a.net); });
     }
+console.log("First launch status: " + allLaunches[0].status);
+console.log("First launch status name: " + (allLaunches[0].status ? allLaunches[0].status.name : "NO STATUS"));
+console.log("First launch net: " + allLaunches[0].net);
+console.log("Current tab: " + currentTab);
 
     console.log("Filtered count:", filteredLaunches.length);
     renderLaunches();
