@@ -13,12 +13,12 @@
     <!-- ============ HEADER ============ -->
     <header>
         <div class="header-content">
-            <h1>🚀 CHRIS THE ROCKET GUY PRESENTS</h1>
-            <p class="tagline">Your front-row guide to launch viewing from Florida's Space Coast</p>
+            <h1>🚀 CHRIS THE ROCKET GUY</h1>
+            <p class="tagline">Your front-row guide to Florida space launches</p>
             <nav>
-                <button class="active" onclick="switchTab('upcoming', event)">Upcoming</button>
-                <button onclick="switchTab('previous', event)">Previous</button>
-                <button onclick="switchTab('news', event)">News</button>
+                <button class="active" onclick="switchTab('upcoming')">Upcoming</button>
+                <button onclick="switchTab('previous')">Previous</button>
+                <button onclick="switchTab('news')">News</button>
             </nav>
         </div>
     </header>
@@ -52,11 +52,11 @@
             <input type="text" id="searchInput" placeholder="Search launches..." oninput="handleSearch()">
         </div>
         <div id="statusFilters" class="status-filters">
-            <button class="active" onclick="setStatusFilter('all', event)">All</button>
-            <button onclick="setStatusFilter('go', event)">Go</button>
-            <button onclick="setStatusFilter('tbd', event)">TBD</button>
-            <button onclick="setStatusFilter('tbc', event)">TBC</button>
-            <button onclick="setStatusFilter('success', event)">Success</button>
+            <button class="active" onclick="setStatusFilter('all')">All</button>
+            <button onclick="setStatusFilter('go')">Go</button>
+            <button onclick="setStatusFilter('tbd')">TBD</button>
+            <button onclick="setStatusFilter('tbc')">TBC</button>
+            <button onclick="setStatusFilter('success')">Success</button>
         </div>
     </div>
 
@@ -88,10 +88,10 @@
         </div>
     </section>
 
+
     <!-- ============ MODAL ============ -->
     <div id="modalOverlay" class="modal-overlay" onclick="closeModal(event)">
-        <div class="modal-content" onclick="event.stopPropagation()">
-            <button class="modal-close" onclick="closeModal(event)" aria-label="Close modal">&times;</button>
+        <div class="modal-content">
             <img id="modalImage" class="modal-image" src="" alt="Launch Image">
             <div class="modal-body-inner">
                 <h2 id="modalTitle">Launch Details</h2>
