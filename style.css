@@ -823,3 +823,27 @@ footer a {
 .facebook-btn:hover {
     box-shadow: 0 6px 25px rgba(24, 119, 242, 0.5);
 }
+/* =============================================
+   BALCONY / VIEWING GUIDE STYLES
+   ============================================= */
+.balcony-list {
+    list-style: none;
+    padding: 0;
+    margin: 10px 0;
+}
+
+.balcony-list li {
+    padding: 6px 0 6px 20px;
+    position: relative;
+    color: #ccccee;
+}
+
+.balcony-list li::before {
+    content: '🏢';
+    position: absolute;
+    left: 0;
+}
+
+.balcony-list li strong {
+    color: #ff6b35;
+}
