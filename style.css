@@ -870,3 +870,30 @@ footer a {
 .modal-content {
     position: relative;  /* needed for absolute positioning of close button */
 }
+.live-feeds-list {
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0;
+}
+
+.live-feeds-list li {
+    padding: 0.6rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 1rem;
+}
+
+.live-feeds-list li:last-child {
+    border-bottom: none;
+}
+
+.live-feeds-list a {
+    color: #64b5f6;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+.live-feeds-list a:hover {
+    color: #90caf9;
+    text-decoration: underline;
+}
