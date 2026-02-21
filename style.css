@@ -751,3 +751,43 @@ footer a {
         font-size: 1.5em;
     }
 }
+/* ============ CONTACT SECTION ============ */
+.contact-section {
+    text-align: center;
+    padding: 50px 20px;
+    margin: 40px auto;
+    max-width: 600px;
+}
+
+.contact-section h2 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.6em;
+    color: #ffffff;
+    margin-bottom: 10px;
+}
+
+.contact-section p {
+    color: #aaaacc;
+    font-size: 1em;
+    line-height: 1.6;
+    margin-bottom: 20px;
+}
+
+.contact-btn {
+    display: inline-block;
+    background: linear-gradient(135deg, #ff6b35, #ff4500);
+    color: #ffffff;
+    text-decoration: none;
+    padding: 14px 36px;
+    border-radius: 30px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.1em;
+    font-weight: 600;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
+}
+
+.contact-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 25px rgba(255, 107, 53, 0.5);
+}
