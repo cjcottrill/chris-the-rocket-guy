@@ -3,17 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chris The Rocket Guy 🚀</title>
+    <title>Chris The Rocket Guy - Florida Launch Tracker</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
 </head>
 <body>
 
-    <!-- ============================================
-         HEADER WITH NAVIGATION
-         ============================================ -->
+    <!-- ============ HEADER ============ -->
     <header>
         <div class="header-content">
-            <div class="logo">🚀 Chris <span>The Rocket Guy</span></div>
+            <h1>🚀 CHRIS THE ROCKET GUY</h1>
+            <p class="tagline">Your front-row seat to Florida space launches</p>
             <nav>
                 <button class="active" onclick="switchTab('upcoming')">Upcoming</button>
                 <button onclick="switchTab('previous')">Previous</button>
@@ -22,107 +23,85 @@
         </div>
     </header>
 
-    <!-- ============================================
-         HERO SECTION
-         ============================================ -->
-    <section class="hero">
-        <h1>🚀 Chris The Rocket Guy</h1>
-        <p>Track every rocket launch from Florida's Space Coast!</p>
+    <!-- ============ COUNTDOWN ============ -->
+    <section id="countdownSection" class="countdown-section">
+        <h2 id="countdownName">Loading next launch...</h2>
+        <div class="countdown-grid">
+            <div class="cd-block">
+                <span class="cd-number" id="cd-days">--</span>
+                <span class="cd-label">Days</span>
+            </div>
+            <div class="cd-block">
+                <span class="cd-number" id="cd-hours">--</span>
+                <span class="cd-label">Hours</span>
+            </div>
+            <div class="cd-block">
+                <span class="cd-number" id="cd-mins">--</span>
+                <span class="cd-label">Minutes</span>
+            </div>
+            <div class="cd-block">
+                <span class="cd-number" id="cd-secs">--</span>
+                <span class="cd-label">Seconds</span>
+            </div>
+        </div>
     </section>
 
-    <!-- ============================================
-         NEXT LAUNCH COUNTDOWN
-         ============================================ -->
-    <div class="next-launch-countdown" id="countdownSection">
-        <h2>🔥 NEXT LAUNCH</h2>
-        <div class="mission-name" id="countdownName">Loading...</div>
-        <div class="countdown-timer" id="countdownTimer">
-            <div class="countdown-unit">
-                <div class="number" id="cd-days">--</div>
-                <div class="label">Days</div>
-            </div>
-            <div class="countdown-unit">
-                <div class="number" id="cd-hours">--</div>
-                <div class="label">Hours</div>
-            </div>
-            <div class="countdown-unit">
-                <div class="number" id="cd-mins">--</div>
-                <div class="label">Mins</div>
-            </div>
-            <div class="countdown-unit">
-                <div class="number" id="cd-secs">--</div>
-                <div class="label">Secs</div>
-            </div>
+    <!-- ============ CONTROLS ============ -->
+    <div class="controls">
+        <div id="searchContainer" class="search-container">
+            <input type="text" id="searchInput" placeholder="Search launches..." oninput="handleSearch()">
+        </div>
+        <div id="statusFilters" class="status-filters">
+            <button class="active" onclick="setStatusFilter('all')">All</button>
+            <button onclick="setStatusFilter('go')">Go</button>
+            <button onclick="setStatusFilter('tbd')">TBD</button>
+            <button onclick="setStatusFilter('tbc')">TBC</button>
+            <button onclick="setStatusFilter('success')">Success</button>
         </div>
     </div>
 
-    <!-- ============================================
-         CACHE INDICATOR
-         ============================================ -->
-    <div class="cache-indicator" id="cacheIndicator"></div>
+    <!-- ============ CACHE INDICATOR ============ -->
+    <div id="cacheIndicator" class="cache-indicator"></div>
 
-    <!-- ============================================
-         SEARCH BAR
-         ============================================ -->
-    <div class="search-container" id="searchContainer">
-        <input type="text" id="searchInput" placeholder="Search launches..." oninput="handleSearch()">
-    </div>
-
-    <!-- ============================================
-         STATUS FILTER TABS
-         ============================================ -->
-    <div class="status-filters" id="statusFilters">
-        <button class="active" onclick="setStatusFilter('all')">All</button>
-        <button onclick="setStatusFilter('Go')">Go ✅</button>
-        <button onclick="setStatusFilter('TBD')">TBD ⏳</button>
-        <button onclick="setStatusFilter('TBC')">TBC 📋</button>
-        <button onclick="setStatusFilter('Success')">Success 🎉</button>
-        <button onclick="setStatusFilter('Failure')">Failure ❌</button>
-    </div>
-
-    <!-- ============================================
-         MAIN CONTENT - Launches load here
-         ============================================ -->
-    <div class="content" id="mainContent">
+    <!-- ============ MAIN CONTENT ============ -->
+    <main id="mainContent">
         <div class="loading">
             <div class="spinner"></div>
             <p>Fetching launch data from the cosmos...</p>
         </div>
-    </div>
+    </main>
 
-    <!-- ============================================
-         PAGINATION
-         ============================================ -->
-    <div class="pagination" id="pagination" style="display: none;">
+    <!-- ============ PAGINATION ============ -->
+    <div id="pagination" class="pagination" style="display: none;">
         <button id="prevBtn" onclick="changePage(-1)">← Previous</button>
-        <span class="page-info" id="pageInfo">Page 1</span>
+        <span id="pageInfo">Page 1</span>
         <button id="nextBtn" onclick="changePage(1)">Next →</button>
     </div>
 
-    <!-- ============================================
-         LAUNCH DETAIL MODAL
-         ============================================ -->
-    <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
-        <div class="modal">
-            <div class="modal-header">
+    <!-- ============ CONTACT ============ -->
+    <section class="contact-section">
+        <h2>📬 Get In Touch</h2>
+        <p>Have a question about an upcoming launch? Want viewing tips for your trip? Just want to talk rockets?</p>
+        <a href="mailto:cjcottrill@gmail.com" class="contact-btn">✉️ Email Chris</a>
+    </section>
+
+    <!-- ============ MODAL ============ -->
+    <div id="modalOverlay" class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal-content">
+            <img id="modalImage" class="modal-image" src="" alt="Launch Image">
+            <div class="modal-body-inner">
                 <h2 id="modalTitle">Launch Details</h2>
-                <button class="modal-close" onclick="document.getElementById('modalOverlay').classList.remove('open')">✕</button>
-            </div>
-            <img class="modal-image" id="modalImage" src="" alt="Launch image">
-            <div class="modal-body" id="modalBody">
-                <!-- Filled by JavaScript -->
+                <div id="modalBody"></div>
             </div>
         </div>
     </div>
 
-    <!-- ============================================
-         FOOTER
-         ============================================ -->
+    <!-- ============ FOOTER ============ -->
     <footer>
+        <p>Data provided by the <a href="https://thespacedevs.com/" target="_blank">Launch Library 2 API</a> & <a href="https://api.spaceflightnewsapi.net/" target="_blank">Spaceflight News API</a></p>
+        <p>Built with 🔥 and rocket fuel by Chris The Rocket Guy</p>
     </footer>
 
-    <!-- Load the JavaScript -->
     <script src="script.js"></script>
-
 </body>
 </html>
