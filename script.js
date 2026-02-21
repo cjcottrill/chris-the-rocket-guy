@@ -27,9 +27,7 @@ async function loadLaunchExtras() {
 }
 
 // =============================================
-// TRAJECTORY DETECTION ENGINE 🧭
-// Automatically figures out which direction
-// to look from the beach based on mission name
+// TRAJECTORY DETECTION ENGINE
 // =============================================
 
 function getTrajectoryInfo(launch) {
@@ -39,9 +37,6 @@ function getTrajectoryInfo(launch) {
     const launchId = launch.id || '';
     const slug = launch.slug || '';
 
-    // ------------------------------------------
-    // Step 1: Check manual overrides first
-    // ------------------------------------------
     const extrasById = launchExtras[launchId];
     const extrasBySlug = launchExtras[slug];
     const extras = extrasById || extrasBySlug;
@@ -57,13 +52,6 @@ function getTrajectoryInfo(launch) {
         };
     }
 
-    // ------------------------------------------
-    // Step 2: Starlink Group Detection
-    // Pattern: "Starlink Group X-YY"
-    // Groups 6, 12 → Southeast (look right)
-    // Groups 8, 10 → Northeast (look left)
-    // Groups 9, 11 → Vandenberg (shouldn't appear)
-    // ------------------------------------------
     const starlinkMatch = missionName.match(/starlink\s+group\s+(\d+)/i);
     if (starlinkMatch) {
         const groupNum = parseInt(starlinkMatch[1]);
@@ -89,7 +77,6 @@ function getTrajectoryInfo(launch) {
         }
 
         if ([9, 11].includes(groupNum)) {
-            // Vandenberg — shouldn't show up since we filter by Florida
             return {
                 trajectory: 'vandenberg',
                 direction: 'Launches from California — not visible from Florida',
@@ -99,7 +86,6 @@ function getTrajectoryInfo(launch) {
             };
         }
 
-        // Unknown group number — provide generic tip
         return {
             trajectory: 'unknown',
             direction: null,
@@ -109,11 +95,6 @@ function getTrajectoryInfo(launch) {
         };
     }
 
-    // ------------------------------------------
-    // Step 3: NASA Crew Missions → RTLS
-    // Dragon crew missions return the booster
-    // to the landing zone (LZ-1) at the Cape
-    // ------------------------------------------
     const isCrewMission = /crew[\s-]*\d/i.test(missionName) ||
                           /crew\s+dragon/i.test(missionName) ||
                           missionName.includes('uscv') ||
@@ -129,10 +110,6 @@ function getTrajectoryInfo(launch) {
         };
     }
 
-    // ------------------------------------------
-    // Step 4: Other known RTLS indicators
-    // Heavy sats, national security, etc.
-    // ------------------------------------------
     const isHeavy = rocketName.includes('falcon heavy');
     if (isHeavy) {
         return {
@@ -144,9 +121,6 @@ function getTrajectoryInfo(launch) {
         };
     }
 
-    // ------------------------------------------
-    // Step 5: Default for other Florida launches
-    // ------------------------------------------
     return {
         trajectory: null,
         direction: null,
@@ -199,11 +173,9 @@ function buildRTLSTips(type) {
 
 // =============================================
 // RENDER "CHRIS SAYS" HTML
-// For use on cards (compact) and modal (full)
 // =============================================
 
 function renderChrisSaysCard(trajectoryInfo) {
-    // If no info, return empty
     if (!trajectoryInfo.chrisSays && !trajectoryInfo.direction) return '';
 
     const info = trajectoryInfo.chrisSays;
@@ -355,7 +327,7 @@ function renderTrajectoryBadge(trajectoryInfo) {
 }
 
 // =============================================
-// CACHE SYSTEM 💾
+// CACHE SYSTEM
 // =============================================
 const cache = {};
 
@@ -474,6 +446,7 @@ async function loadLaunches() {
         state.previousUrl = cachedData.previous;
 
         if (state.currentTab === 'upcoming' && state.currentPage === 1 && state.launches.length > 0) {
+            console.log('⏱️ [CACHE] Setting up countdown for:', state.launches[0].name);
             setupCountdown(state.launches[0]);
         }
 
@@ -512,6 +485,9 @@ async function loadLaunches() {
         }
 
         const data = await response.json();
+        console.log('✅ API returned', data.results?.length, 'launches');
+        console.log('🔍 First launch:', data.results?.[0]?.name, '| NET:', data.results?.[0]?.net);
+
         setCachedData(cacheKey, data);
 
         state.launches = data.results || [];
@@ -520,6 +496,7 @@ async function loadLaunches() {
         state.previousUrl = data.previous;
 
         if (state.currentTab === 'upcoming' && state.currentPage === 1 && state.launches.length > 0) {
+            console.log('⏱️ [FRESH] Setting up countdown for:', state.launches[0].name);
             setupCountdown(state.launches[0]);
         }
 
@@ -527,7 +504,7 @@ async function loadLaunches() {
         showCacheIndicator(false, state.currentTab);
 
     } catch (error) {
-        console.error('Error loading launches:', error);
+        console.error('❌ Error loading launches:', error);
         content.innerHTML = `
             <div class="error-message">
                 <h2>😞 Oops! Something went wrong</h2>
@@ -656,7 +633,7 @@ function applyFilters() {
 }
 
 // =============================================
-// RENDER LAUNCHES (with trajectory + Chris Says)
+// RENDER LAUNCHES
 // =============================================
 function renderLaunches(launches) {
     const content = document.getElementById('mainContent');
@@ -690,7 +667,6 @@ function renderLaunches(launches) {
         const location = launch.pad?.location?.name || 'Unknown Location';
         const rocketName = launch.rocket?.configuration?.name || 'Unknown Rocket';
 
-        // NEW: Get trajectory info
         const trajectoryInfo = getTrajectoryInfo(launch);
         const trajectoryBadgeHtml = renderTrajectoryBadge(trajectoryInfo);
         const chrisSaysHtml = renderChrisSaysCard(trajectoryInfo);
@@ -778,34 +754,107 @@ function renderNews(articles) {
 }
 
 // =============================================
-// COUNTDOWN TIMER
+// COUNTDOWN TIMER — DEBUGGED
 // =============================================
 function setupCountdown(launch) {
+    console.log('⏱️ setupCountdown() called');
+    console.log('⏱️ Launch name:', launch?.name);
+    console.log('⏱️ Launch NET:', launch?.net);
+
+    // Clear any existing interval
     if (state.countdownInterval) {
         clearInterval(state.countdownInterval);
+        state.countdownInterval = null;
+        console.log('⏱️ Cleared previous interval');
     }
 
-    document.getElementById('countdownName').textContent = launch.name || 'Unknown Mission';
+    // Verify DOM elements exist
+    const nameEl = document.getElementById('countdownName');
+    const daysEl = document.getElementById('cd-days');
+    const hoursEl = document.getElementById('cd-hours');
+    const minsEl = document.getElementById('cd-mins');
+    const secsEl = document.getElementById('cd-secs');
 
-    if (!launch.net) {
-        document.getElementById('countdownTimer').innerHTML = '<p style="color: #aaaacc;">Launch time TBD</p>';
+    console.log('⏱️ DOM check — countdownName:', !!nameEl);
+    console.log('⏱️ DOM check — cd-days:', !!daysEl);
+    console.log('⏱️ DOM check — cd-hours:', !!hoursEl);
+    console.log('⏱️ DOM check — cd-mins:', !!minsEl);
+    console.log('⏱️ DOM check — cd-secs:', !!secsEl);
+
+    if (!nameEl || !daysEl || !hoursEl || !minsEl || !secsEl) {
+        console.error('❌ COUNTDOWN DOM ELEMENTS MISSING — cannot start timer');
         return;
     }
 
+    // Set the mission name
+    nameEl.textContent = launch.name || 'Unknown Mission';
+    console.log('⏱️ Set countdown name to:', nameEl.textContent);
+
+    // Make sure the section is visible
+    const section = document.getElementById('countdownSection');
+    if (section) {
+        section.style.display = 'block';
+        console.log('⏱️ Countdown section visibility: block');
+    }
+
+    // Check for valid date
+    if (!launch.net) {
+        console.warn('⏱️ No NET date — showing TBD');
+        daysEl.textContent = '--';
+        hoursEl.textContent = '--';
+        minsEl.textContent = '--';
+        secsEl.textContent = '--';
+        return;
+    }
+
+    // Parse and validate date
     state.nextLaunchDate = new Date(launch.net);
+    console.log('⏱️ Parsed launch date:', state.nextLaunchDate);
+    console.log('⏱️ Launch date valid:', !isNaN(state.nextLaunchDate.getTime()));
+
+    if (isNaN(state.nextLaunchDate.getTime())) {
+        console.error('❌ Invalid date from NET:', launch.net);
+        daysEl.textContent = '--';
+        hoursEl.textContent = '--';
+        minsEl.textContent = '--';
+        secsEl.textContent = '--';
+        return;
+    }
+
+    // Run immediately, then every second
     updateCountdown();
     state.countdownInterval = setInterval(updateCountdown, 1000);
+    console.log('⏱️ Countdown interval started ✅');
 }
 
 function updateCountdown() {
     const now = new Date();
     const diff = state.nextLaunchDate - now;
 
+    const daysEl = document.getElementById('cd-days');
+    const hoursEl = document.getElementById('cd-hours');
+    const minsEl = document.getElementById('cd-mins');
+    const secsEl = document.getElementById('cd-secs');
+
+    if (!daysEl || !hoursEl || !minsEl || !secsEl) {
+        console.error('❌ Countdown elements disappeared from DOM');
+        if (state.countdownInterval) {
+            clearInterval(state.countdownInterval);
+            state.countdownInterval = null;
+        }
+        return;
+    }
+
     if (diff <= 0) {
-        document.getElementById('cd-days').textContent = '0';
-        document.getElementById('cd-hours').textContent = '0';
-        document.getElementById('cd-mins').textContent = '0';
-        document.getElementById('cd-secs').textContent = '0';
+        daysEl.textContent = '0';
+        hoursEl.textContent = '00';
+        minsEl.textContent = '00';
+        secsEl.textContent = '00';
+        if (state.countdownInterval) {
+            clearInterval(state.countdownInterval);
+            state.countdownInterval = null;
+            console.log('⏱️ Countdown reached zero — stopped');
+        }
         return;
     }
 
@@ -814,14 +863,14 @@ function updateCountdown() {
     const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     const secs = Math.floor((diff % (1000 * 60)) / 1000);
 
-    document.getElementById('cd-days').textContent = days;
-    document.getElementById('cd-hours').textContent = hours.toString().padStart(2, '0');
-    document.getElementById('cd-mins').textContent = mins.toString().padStart(2, '0');
-    document.getElementById('cd-secs').textContent = secs.toString().padStart(2, '0');
+    daysEl.textContent = days;
+    hoursEl.textContent = hours.toString().padStart(2, '0');
+    minsEl.textContent = mins.toString().padStart(2, '0');
+    secsEl.textContent = secs.toString().padStart(2, '0');
 }
 
 // =============================================
-// LAUNCH DETAIL MODAL (with Chris Says)
+// LAUNCH DETAIL MODAL
 // =============================================
 function openModal(index) {
     const launch = state.filteredLaunches[index];
@@ -856,7 +905,6 @@ function openModal(index) {
     const missionType = launch.mission?.type || 'N/A';
     const orbit = launch.mission?.orbit?.name || 'N/A';
 
-    // NEW: Get trajectory info for modal
     const trajectoryInfo = getTrajectoryInfo(launch);
     const chrisSaysModalHtml = renderChrisSaysModal(trajectoryInfo);
 
@@ -970,7 +1018,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     console.log('🚀 Chris The Rocket Guy is launching...');
     console.log('💾 Cache system active — durations:', CACHE_DURATIONS);
 
-    // Load manual extras first, then launches
     await loadLaunchExtras();
     loadLaunches();
 });
