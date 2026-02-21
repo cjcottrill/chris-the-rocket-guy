@@ -44,6 +44,60 @@ function findLaunchExtras(launch) {
 }
 
 // =============================================
+// SUNSET CALCULATOR (Cape Canaveral)
+// =============================================
+function getSunsetTime(dateObj) {
+    // Simple solar calculation for Cape Canaveral (28.3922°N, -80.6077°W)
+    const lat = 28.3922;
+    const lng = -80.6077;
+    
+    const dayOfYear = Math.floor((dateObj - new Date(dateObj.getFullYear(), 0, 0)) / 86400000);
+    
+    // Solar declination
+    const declination = -23.45 * Math.cos((360 / 365) * (dayOfYear + 10) * Math.PI / 180);
+    
+    // Hour angle for sunset
+    const latRad = lat * Math.PI / 180;
+    const declRad = declination * Math.PI / 180;
+    const hourAngle = Math.acos(-Math.tan(latRad) * Math.tan(declRad)) * 180 / Math.PI;
+    
+    // Solar noon in UTC (approximate)
+    const solarNoonUTC = 12 - (lng / 15);
+    
+    // Sunset in UTC hours
+    const sunsetUTC = solarNoonUTC + (hourAngle / 15);
+    
+    // Convert to EST/EDT
+    const isDST = isDaylightSavingTime(dateObj);
+    const offset = isDST ? 4 : 5;
+    const sunsetLocal = sunsetUTC - offset;
+    
+    // Build a Date object for sunset on that day
+    const sunset = new Date(dateObj);
+    const sunsetHours = Math.floor(sunsetLocal);
+    const sunsetMins = Math.round((sunsetLocal - sunsetHours) * 60);
+    sunset.setHours(sunsetHours, sunsetMins, 0, 0);
+    
+    console.log(`🌅 Sunset for ${dateObj.toDateString()}: ${sunset.toLocaleTimeString()} (${isDST ? 'EDT' : 'EST'})`);
+    return sunset;
+}
+
+function isDaylightSavingTime(date) {
+    const jan = new Date(date.getFullYear(), 0, 1).getTimezoneOffset();
+    const jul = new Date(date.getFullYear(), 6, 1).getTimezoneOffset();
+    return date.getTimezoneOffset() < Math.max(jan, jul);
+}
+
+function isBeforeSunset(launchDate) {
+    if (!launchDate) return true; // default to daytime tips
+    const launch = new Date(launchDate);
+    const sunset = getSunsetTime(launch);
+    const isBefore = launch < sunset;
+    console.log(`🌅 Launch at ${launch.toLocaleTimeString()} is ${isBefore ? 'BEFORE' : 'AFTER'} sunset`);
+    return isBefore;
+}
+
+// =============================================
 // TRAJECTORY DETECTION ENGINE
 // =============================================
 
@@ -61,6 +115,7 @@ function getTrajectoryInfo(launch) {
             isRTLS: extras.rtls || false,
             chrisSays: extras.chrisSays || null,
             videoUrl: extras.video_url || null,
+            launchNet: launch.net || null,
             source: 'manual'
         };
     }
@@ -72,10 +127,11 @@ function getTrajectoryInfo(launch) {
         if ([6, 12].includes(groupNum)) {
             return {
                 trajectory: 'southeast',
-                direction: '👉 Look RIGHT from the beach',
+                direction: null,
                 isRTLS: false,
-                chrisSays: buildStarlinkTips('southeast', groupNum),
+                chrisSays: null,
                 videoUrl: null,
+                launchNet: launch.net || null,
                 source: 'auto-starlink'
             };
         }
@@ -87,6 +143,7 @@ function getTrajectoryInfo(launch) {
                 isRTLS: false,
                 chrisSays: buildStarlinkTips('northeast', groupNum),
                 videoUrl: null,
+                launchNet: launch.net || null,
                 source: 'auto-starlink'
             };
         }
@@ -98,6 +155,7 @@ function getTrajectoryInfo(launch) {
                 isRTLS: false,
                 chrisSays: null,
                 videoUrl: null,
+                launchNet: launch.net || null,
                 source: 'auto-starlink'
             };
         }
@@ -106,8 +164,12 @@ function getTrajectoryInfo(launch) {
             trajectory: 'unknown',
             direction: null,
             isRTLS: false,
-            chrisSays: 'This is a Starlink mission. Watch for the first stage landing on the drone ship about 8.5 minutes after launch!',
+            chrisSays: {
+                summary: 'This is a Starlink mission. Watch for the first stage landing on the drone ship about 8.5 minutes after launch!',
+                tips: []
+            },
             videoUrl: null,
+            launchNet: launch.net || null,
             source: 'auto-starlink'
         };
     }
@@ -124,6 +186,7 @@ function getTrajectoryInfo(launch) {
             isRTLS: true,
             chrisSays: buildRTLSTips('crew'),
             videoUrl: null,
+            launchNet: launch.net || null,
             source: 'auto-crew'
         };
     }
@@ -136,6 +199,7 @@ function getTrajectoryInfo(launch) {
             isRTLS: true,
             chrisSays: buildRTLSTips('heavy'),
             videoUrl: null,
+            launchNet: launch.net || null,
             source: 'auto-heavy'
         };
     }
@@ -146,18 +210,57 @@ function getTrajectoryInfo(launch) {
         isRTLS: false,
         chrisSays: null,
         videoUrl: null,
+        launchNet: launch.net || null,
         source: 'none'
     };
 }
 
 // =============================================
-// BUILD CHRIS'S TIPS
+// BUILD SOUTHEAST STARLINK TIPS (time-aware)
+// =============================================
+
+function buildSoutheastTips(launchNet) {
+    const daytime = isBeforeSunset(launchNet);
+
+    const baseSummary = 'Facing north on the beach (spot the Jetty Park lifeguard shack), the rocket will lift off from about your 11 o\'clock and head out over the ocean southward toward your 5 o\'clock.';
+
+    let timeTip = '';
+    if (daytime) {
+        timeTip = 'Assuming clear skies prevail, you may see some of the second stage burn, but it\'s very faint and high in altitude, so the view won\'t last long. Enjoy the view of the rocket\'s body in the sunlight!';
+    } else {
+        timeTip = 'Watch for developing colors in the rocket\'s plume as it gains altitude — you should expect to see lots of orange and yellow, but you may also see blue, purple, and green!';
+    }
+
+    const tips = [timeTip];
+
+    if (!daytime) {
+        tips.push('At T+ 00:06:15, watch close to the horizon — you might just see the booster perform its "return burn," slowing itself as it begins its free fall back to Earth. This event appears low on the horizon, but it\'s actually happening at an altitude of 40 miles!');
+    }
+
+    return {
+        summary: baseSummary,
+        tips: tips,
+        balconies: {
+            intro: 'Preferred balcony viewing:',
+            spots: [
+                { building: 'Building 1', detail: 'Levels 3 & 4, pool-facing — best views' },
+                { building: 'Building 2', detail: 'Levels 3 & 4, ocean-facing — best views' }
+            ],
+            beachNote: 'For everyone else, I recommend the beach. Unless you have a beach at home with a rocket launch facility next door, you can\'t have this experience anywhere else in the world.',
+            balconyNote: 'Some north-facing balconies will have a view of the launch site — you may find this view equally satisfying without seeing the longer duration of the flight.'
+        },
+        isDaytime: daytime
+    };
+}
+
+// =============================================
+// BUILD CHRIS'S TIPS (non-southeast)
 // =============================================
 
 function buildStarlinkTips(direction, groupNum) {
-    const dirText = direction === 'southeast'
-        ? 'This Starlink mission heads SOUTHEAST over the ocean. From the beach, look to your RIGHT.'
-        : 'This Starlink mission heads NORTHEAST along the coast. From the beach, look to your LEFT.';
+    const dirText = direction === 'northeast'
+        ? 'This Starlink mission heads NORTHEAST along the coast. From the beach, look to your LEFT.'
+        : 'This Starlink mission heads SOUTHEAST over the ocean.';
 
     return {
         summary: dirText,
@@ -192,10 +295,15 @@ function buildRTLSTips(type) {
 }
 
 // =============================================
-// RENDER "CHRIS SAYS" HTML
+// RENDER "CHRIS SAYS" HTML (Card view)
 // =============================================
 
 function renderChrisSaysCard(trajectoryInfo) {
+    // Southeast gets special rendering
+    if (trajectoryInfo.trajectory === 'southeast') {
+        return renderSoutheastCard(trajectoryInfo);
+    }
+
     if (!trajectoryInfo.chrisSays && !trajectoryInfo.direction) return '';
 
     const info = trajectoryInfo.chrisSays;
@@ -246,7 +354,41 @@ function renderChrisSaysCard(trajectoryInfo) {
     `;
 }
 
+function renderSoutheastCard(trajectoryInfo) {
+    const seTips = buildSoutheastTips(trajectoryInfo.launchNet);
+    const uniqueId = 'cs-' + Math.random().toString(36).substr(2, 9);
+
+    let contentHtml = `
+        <div class="tip-box">
+            <div class="tip-label">📍 Where to Look</div>
+            <p>${seTips.summary}</p>
+        </div>
+        <p>${seTips.isDaytime ? '☀️' : '🌙'} ${seTips.tips[0]}</p>
+    `;
+
+    return `
+        <div class="chris-says" onclick="event.stopPropagation()">
+            <button class="chris-says-toggle" onclick="toggleChrisSays('${uniqueId}', this)">
+                <span class="arrow" id="arrow-${uniqueId}">▶</span>
+                🎙️ Chris says...
+            </button>
+            <div class="chris-says-content" id="${uniqueId}">
+                ${contentHtml}
+            </div>
+        </div>
+    `;
+}
+
+// =============================================
+// RENDER "CHRIS SAYS" HTML (Modal view - full detail)
+// =============================================
+
 function renderChrisSaysModal(trajectoryInfo) {
+    // Southeast gets special full rendering
+    if (trajectoryInfo.trajectory === 'southeast') {
+        return renderSoutheastModal(trajectoryInfo);
+    }
+
     if (!trajectoryInfo.chrisSays && !trajectoryInfo.direction) return '';
 
     const info = trajectoryInfo.chrisSays;
@@ -291,6 +433,59 @@ function renderChrisSaysModal(trajectoryInfo) {
                         <span class="rtls-desc">${event.desc}</span>
                     </div>
                 `).join('')}
+            </div>
+        `;
+    }
+
+    return `
+        <div class="modal-chris-says">
+            <h4>🎙️ Chris Says...</h4>
+            ${contentHtml}
+        </div>
+    `;
+}
+
+function renderSoutheastModal(trajectoryInfo) {
+    const seTips = buildSoutheastTips(trajectoryInfo.launchNet);
+
+    let contentHtml = `
+        <div class="tip-box">
+            <div class="tip-label">📍 Where to Look</div>
+            <p>${seTips.summary}</p>
+        </div>
+    `;
+
+    // Time-of-day section
+    contentHtml += `
+        <div class="tip-box">
+            <div class="tip-label">${seTips.isDaytime ? '☀️ Daytime Launch' : '🌙 Night Launch'}</div>
+            <p>${seTips.tips[0]}</p>
+        </div>
+    `;
+
+    // Night launch bonus: entry burn detail
+    if (!seTips.isDaytime && seTips.tips.length > 1) {
+        contentHtml += `
+            <div class="tip-box">
+                <div class="tip-label">🔥 Booster Return Burn</div>
+                <p>${seTips.tips[1]}</p>
+            </div>
+        `;
+    }
+
+    // Balcony & beach viewing guide
+    if (seTips.balconies) {
+        contentHtml += `
+            <div class="tip-box">
+                <div class="tip-label">🏨 Viewing Guide</div>
+                <p><strong>${seTips.balconies.intro}</strong></p>
+                <ul class="balcony-list">
+                    ${seTips.balconies.spots.map(spot => `
+                        <li><strong>${spot.building}</strong> — ${spot.detail}</li>
+                    `).join('')}
+                </ul>
+                <p style="margin-top: 10px;">🏖️ ${seTips.balconies.beachNote}</p>
+                <p style="margin-top: 8px; font-size: 0.9em; opacity: 0.85;">📝 ${seTips.balconies.balconyNote}</p>
             </div>
         `;
     }
@@ -385,7 +580,7 @@ function setCachedData(key, data) {
         data: data,
         timestamp: Date.now()
     };
-    console.log(`💾 Cached "${key}" — ${Object.keys(cache).length, 'items in cache'}`);
+    console.log(`💾 Cached "${key}"`);
 }
 
 function showCacheIndicator(fromCache, type) {
