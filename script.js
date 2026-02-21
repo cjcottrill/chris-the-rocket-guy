@@ -27,6 +27,23 @@ async function loadLaunchExtras() {
 }
 
 // =============================================
+// LAUNCH EXTRAS LOOKUP HELPER
+// =============================================
+function findLaunchExtras(launch) {
+    const launchId = launch.id || '';
+    const slug = launch.slug || '';
+    const nameSlug = (launch.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+    const extras = launchExtras[launchId] || launchExtras[slug] || launchExtras[nameSlug];
+
+    if (extras) {
+        console.log(`📋 Found extras for "${launch.name}" via key match`);
+    }
+
+    return extras || null;
+}
+
+// =============================================
 // TRAJECTORY DETECTION ENGINE
 // =============================================
 
@@ -34,20 +51,16 @@ function getTrajectoryInfo(launch) {
     const missionName = (launch.name || '').toLowerCase();
     const missionDesc = (launch.mission?.description || '').toLowerCase();
     const rocketName = (launch.rocket?.configuration?.name || '').toLowerCase();
-    const launchId = launch.id || '';
-    const slug = launch.slug || '';
 
-    const extrasById = launchExtras[launchId];
-    const extrasBySlug = launchExtras[slug];
-    const extras = extrasById || extrasBySlug;
+    const extras = findLaunchExtras(launch);
 
     if (extras) {
-        console.log(`📋 Found manual extras for: ${launch.name}`);
         return {
             trajectory: extras.trajectory || null,
             direction: extras.direction || null,
             isRTLS: extras.rtls || false,
             chrisSays: extras.chrisSays || null,
+            videoUrl: extras.video_url || null,
             source: 'manual'
         };
     }
@@ -62,6 +75,7 @@ function getTrajectoryInfo(launch) {
                 direction: '👉 Look RIGHT from the beach',
                 isRTLS: false,
                 chrisSays: buildStarlinkTips('southeast', groupNum),
+                videoUrl: null,
                 source: 'auto-starlink'
             };
         }
@@ -72,6 +86,7 @@ function getTrajectoryInfo(launch) {
                 direction: '👈 Look LEFT from the beach',
                 isRTLS: false,
                 chrisSays: buildStarlinkTips('northeast', groupNum),
+                videoUrl: null,
                 source: 'auto-starlink'
             };
         }
@@ -82,6 +97,7 @@ function getTrajectoryInfo(launch) {
                 direction: 'Launches from California — not visible from Florida',
                 isRTLS: false,
                 chrisSays: null,
+                videoUrl: null,
                 source: 'auto-starlink'
             };
         }
@@ -91,6 +107,7 @@ function getTrajectoryInfo(launch) {
             direction: null,
             isRTLS: false,
             chrisSays: 'This is a Starlink mission. Watch for the first stage landing on the drone ship about 8.5 minutes after launch!',
+            videoUrl: null,
             source: 'auto-starlink'
         };
     }
@@ -106,6 +123,7 @@ function getTrajectoryInfo(launch) {
             direction: '👈 Look LEFT from the beach',
             isRTLS: true,
             chrisSays: buildRTLSTips('crew'),
+            videoUrl: null,
             source: 'auto-crew'
         };
     }
@@ -117,6 +135,7 @@ function getTrajectoryInfo(launch) {
             direction: null,
             isRTLS: true,
             chrisSays: buildRTLSTips('heavy'),
+            videoUrl: null,
             source: 'auto-heavy'
         };
     }
@@ -126,6 +145,7 @@ function getTrajectoryInfo(launch) {
         direction: null,
         isRTLS: false,
         chrisSays: null,
+        videoUrl: null,
         source: 'none'
     };
 }
@@ -365,7 +385,7 @@ function setCachedData(key, data) {
         data: data,
         timestamp: Date.now()
     };
-    console.log(`💾 Cached "${key}" — ${Object.keys(cache).length} items in cache`);
+    console.log(`💾 Cached "${key}" — ${Object.keys(cache).length, 'items in cache'}`);
 }
 
 function showCacheIndicator(fromCache, type) {
@@ -754,21 +774,19 @@ function renderNews(articles) {
 }
 
 // =============================================
-// COUNTDOWN TIMER — DEBUGGED
+// COUNTDOWN TIMER
 // =============================================
 function setupCountdown(launch) {
     console.log('⏱️ setupCountdown() called');
     console.log('⏱️ Launch name:', launch?.name);
     console.log('⏱️ Launch NET:', launch?.net);
 
-    // Clear any existing interval
     if (state.countdownInterval) {
         clearInterval(state.countdownInterval);
         state.countdownInterval = null;
         console.log('⏱️ Cleared previous interval');
     }
 
-    // Verify DOM elements exist
     const nameEl = document.getElementById('countdownName');
     const daysEl = document.getElementById('cd-days');
     const hoursEl = document.getElementById('cd-hours');
@@ -786,18 +804,15 @@ function setupCountdown(launch) {
         return;
     }
 
-    // Set the mission name
     nameEl.textContent = launch.name || 'Unknown Mission';
     console.log('⏱️ Set countdown name to:', nameEl.textContent);
 
-    // Make sure the section is visible
     const section = document.getElementById('countdownSection');
     if (section) {
         section.style.display = 'block';
         console.log('⏱️ Countdown section visibility: block');
     }
 
-    // Check for valid date
     if (!launch.net) {
         console.warn('⏱️ No NET date — showing TBD');
         daysEl.textContent = '--';
@@ -807,7 +822,6 @@ function setupCountdown(launch) {
         return;
     }
 
-    // Parse and validate date
     state.nextLaunchDate = new Date(launch.net);
     console.log('⏱️ Parsed launch date:', state.nextLaunchDate);
     console.log('⏱️ Launch date valid:', !isNaN(state.nextLaunchDate.getTime()));
@@ -821,7 +835,6 @@ function setupCountdown(launch) {
         return;
     }
 
-    // Run immediately, then every second
     updateCountdown();
     state.countdownInterval = setInterval(updateCountdown, 1000);
     console.log('⏱️ Countdown interval started ✅');
@@ -876,6 +889,10 @@ function openModal(index) {
     const launch = state.filteredLaunches[index];
     if (!launch) return;
 
+    console.log('🔍 Modal opened for:', launch.name);
+    console.log('🔍 Launch ID:', launch.id);
+    console.log('🔍 Launch slug:', launch.slug);
+
     const modal = document.getElementById('modalOverlay');
     const imageUrl = launch.image || 'https://via.placeholder.com/700x300/0a0a2e/666699?text=No+Image';
 
@@ -908,9 +925,29 @@ function openModal(index) {
     const trajectoryInfo = getTrajectoryInfo(launch);
     const chrisSaysModalHtml = renderChrisSaysModal(trajectoryInfo);
 
+    // ---- BUILD WATCH LIVE SECTION ----
     let webcastHtml = '';
+
+    // Check for manual video URL from launch-extras.json
+    if (trajectoryInfo.videoUrl) {
+        webcastHtml = `
+            <div style="margin-top: 20px;">
+                <strong>📺 Watch Live:</strong><br>
+                <a href="${trajectoryInfo.videoUrl}" target="_blank" 
+                   style="color: #ff6b35; font-weight: bold; font-size: 1.1em;">
+                   🔴 Live Stream
+                </a>
+            </div>
+        `;
+    }
+
+    // Also include any API-provided video URLs
     if (launch.vidURLs && launch.vidURLs.length > 0) {
-        webcastHtml = '<div style="margin-top: 15px;"><strong>📺 Watch Live:</strong><br>';
+        if (!webcastHtml) {
+            webcastHtml = '<div style="margin-top: 20px;"><strong>📺 Watch Live:</strong><br>';
+        } else {
+            webcastHtml += '<div style="margin-top: 10px;">';
+        }
         launch.vidURLs.forEach(vid => {
             webcastHtml += `<a href="${vid.url}" target="_blank" style="color: #ff6b35; margin-right: 10px;">${vid.title || 'Webcast'}</a> `;
         });
