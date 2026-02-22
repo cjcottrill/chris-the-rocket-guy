@@ -1,7 +1,7 @@
 // =============================================
 // CHRIS THE ROCKET GUY - MAIN SCRIPT
 // =============================================
-
+f
 // =============================================
 // CONFIGURATION
 // =============================================
@@ -672,14 +672,18 @@ function renderLaunches(launches) {
 
     launches.forEach((launch, index) => {
         const imageUrl = launch.image || 'https://via.placeholder.com/400x200/0a0a2e/666699?text=No+Image';
-        const date = launch.net ? new Date(launch.net).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            timeZoneName: 'short'
-        }) : 'TBD';
+     const date = launch.net ? new Date(launch.net).toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+    timeZone: 'America/New_York',
+    timeZoneName: 'short'
+}) : 'TBD';
+
 
         const statusName = launch.status?.name || 'Unknown';
         const statusClass = getStatusClass(statusName);
@@ -899,15 +903,19 @@ function openModal(index) {
     document.getElementById('modalTitle').textContent = launch.name || 'Launch Details';
     document.getElementById('modalImage').src = imageUrl;
 
-    const date = launch.net ? new Date(launch.net).toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZoneName: 'short'
-    }) : 'TBD';
+  const date = launch.net ? new Date(launch.net).toLocaleString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+    timeZone: 'America/New_York',
+    timeZoneName: 'short'
+}) : 'TBD';
+
 
     const provider = launch.launch_service_provider?.name || 'Unknown';
     const providerType = launch.launch_service_provider?.type || '';
