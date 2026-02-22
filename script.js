@@ -385,7 +385,8 @@ function setCachedData(key, data) {
         data: data,
         timestamp: Date.now()
     };
-    console.log(`💾 Cached "${key}" — ${Object.keys(cache).length, 'items in cache'}`);
+   console.log(`💾 Cached "${key}" — ${Object.keys(cache).length} items in cache`);
+
 }
 
 function showCacheIndicator(fromCache, type) {
