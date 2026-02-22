@@ -1,7 +1,7 @@
 // =============================================
 // CHRIS THE ROCKET GUY - MAIN SCRIPT
 // =============================================
-f
+
 // =============================================
 // CONFIGURATION
 // =============================================
@@ -750,11 +750,17 @@ function renderNews(articles) {
 
     articles.forEach(article => {
         const imageUrl = article.image_url || 'https://via.placeholder.com/400x200/0a0a2e/666699?text=Space+News';
-        const date = article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-        }) : '';
+      const date = article.published_at ? new Date(article.published_at).toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'America/New_York',
+    timeZoneName: 'short'
+}) : '';
+
 
         const summary = article.summary
             ? (article.summary.length > 150 ? article.summary.substring(0, 150) + '...' : article.summary)
